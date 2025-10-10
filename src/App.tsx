@@ -56,6 +56,8 @@ export default function App() {
     inventory, 
     loading: inventoryLoading, 
     error: inventoryError, 
+    pagination,
+    filters,
     refreshInventory, 
     uploadInventory, 
     clearInventory 
