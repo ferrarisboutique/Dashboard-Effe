@@ -14,6 +14,7 @@ import { EmptyState } from "./components/EmptyState";
 import { DataStatusDebug } from "./components/DataStatusDebug";
 import { SalesDiagnostics } from "./components/SalesDiagnostics";
 import { EmergencyDatabaseCleaner } from "./components/EmergencyDatabaseCleaner";
+import { InventoryVerifier } from "./components/InventoryVerifier";
 import { ProcessedSaleData } from "./types/upload";
 import { ProcessedInventoryData } from "./types/inventory";
 import { Return } from "./types/dashboard";
@@ -93,6 +94,7 @@ export default function App() {
     { id: 'inventory', label: 'Inventario', icon: Package },
     { id: 'debug', label: 'Stato Dati', icon: AlertCircle },
     { id: 'diagnostics', label: 'Diagnostica Vendite', icon: BarChart3 },
+    { id: 'verify-inventory', label: '🔍 Verifica Inventario', icon: CheckCircle },
     { id: 'emergency-clean', label: '🆘 Pulizia Emergenza', icon: AlertCircle },
     { id: 'upload', label: 'Carica Dati', icon: Upload },
     { id: 'upload-inventory', label: 'Carica Inventario', icon: Upload },
@@ -412,6 +414,9 @@ export default function App() {
             }}
           />
         );
+      
+      case 'verify-inventory':
+        return <InventoryVerifier />;
       
       case 'emergency-clean':
         return (

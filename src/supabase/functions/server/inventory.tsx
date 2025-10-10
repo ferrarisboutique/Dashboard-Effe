@@ -255,8 +255,8 @@ inventory.post('/inventory', async (c) => {
     const chunkInfo = chunk && totalChunks ? ` (chunk ${chunk}/${totalChunks})` : '';
     console.log(`Processing ${inventoryData.length} inventory items${chunkInfo}...`);
     
-    // Timeout protection
-    const TIMEOUT_MS = 45000; // 45 seconds to give more time
+    // Timeout protection - increased for large uploads
+    const TIMEOUT_MS = 50000; // 50 seconds for large files (increased from 45)
     const timeoutId = setTimeout(() => {
       console.error('Processing timeout reached');
       throw new Error('Processing timeout - chunk too large or server overload');
@@ -334,8 +334,9 @@ inventory.post('/inventory', async (c) => {
           
           // Check if we're approaching timeout  
           const elapsedTime = Date.now() - startTime;
-          if (elapsedTime > 35000) { // Increased threshold
+          if (elapsedTime > 42000) { // Increased to 42s (from 35s) for large files
             console.warn(`Approaching timeout at ${elapsedTime}ms, stopping processing`);
+            console.warn(`Processed ${processedCount} items before timeout, ${skippedDuplicates} duplicates`);
             break;
           }
         }
