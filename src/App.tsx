@@ -147,10 +147,10 @@ export default function App() {
   const hasInventoryData = inventory.length > 0;
   const hasAnyData = hasSalesData || hasInventoryData;
   
-  // Check for data quality issues
+  // Check for data quality issues - solo se ci sono effettivamente vendite
   const validChannels = ['negozio_donna', 'negozio_uomo', 'ecommerce', 'marketplace'];
   const problematicSalesCount = sales.filter(s => !validChannels.includes(s.channel)).length;
-  const hasDataQualityIssues = problematicSalesCount > 0;
+  const hasDataQualityIssues = problematicSalesCount > 0 && sales.length > 0;
 
   // Mock returns data for now (you can implement this later)
   const returns: Return[] = [];

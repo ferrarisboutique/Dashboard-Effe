@@ -34,7 +34,7 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, onNavi
   // Check for problematic channels
   const validChannels = ['negozio_donna', 'negozio_uomo', 'ecommerce', 'marketplace'];
   const problematicSales = sales.filter(s => !validChannels.includes(s.channel));
-  const hasProblematicChannels = problematicSales.length > 0;
+  const hasProblematicChannels = problematicSales.length > 0 && sales.length > 0;
 
   return (
     <div className="space-y-6">
@@ -45,8 +45,8 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, onNavi
         </h2>
       </div>
 
-      {/* Warning for problematic channels */}
-      {hasProblematicChannels && (
+      {/* Warning for problematic channels - solo se ci sono dati */}
+      {hasProblematicChannels && sales.length > 0 && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Attenzione: Dati Incompleti</AlertTitle>
