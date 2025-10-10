@@ -152,7 +152,12 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
       const result = await response.json();
       
       if (result.success) {
-        toast.success(`${result.savedCount || salesData.length} vendite caricate con successo!`);
+        let message = `${result.savedCount || salesData.length} vendite caricate con successo!`;
+        if (result.skippedDuplicates && result.skippedDuplicates > 0) {
+          toast.warning(`${message}\n⚠️ ${result.skippedDuplicates} vendite duplicate sono state ignorate.`);
+        } else {
+          toast.success(message);
+        }
         // Refresh the sales data
         await fetchSales();
         return true;

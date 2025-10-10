@@ -143,6 +143,8 @@ export function StoreDataUpload({ onDataUploaded }: StoreDataUploadProps) {
               <strong>Formato Data:</strong> dd/mm/aa o dd/mm/aaaa (es: 15/12/24 o 15/12/2024)
               <br />
               <strong>Utenti validi:</strong> {Object.keys(USER_STORE_MAPPING).join(', ')}
+              <br />
+              <strong className="text-blue-600">🛡️ Protezione Anti-Duplicati:</strong> Le vendite identiche (stessa data + SKU + quantità + prezzo) verranno automaticamente saltate per evitare doppi caricamenti.
             </AlertDescription>
           </Alert>
 

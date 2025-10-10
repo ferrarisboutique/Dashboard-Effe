@@ -152,7 +152,7 @@ export function InventoryDataUpload({ onDataUploaded, onClearInventory }: Invent
               </div>
               <div className="mt-4 space-y-2">
                 <p className="text-sm text-blue-700">
-                  <strong>Comportamento upload:</strong> Gli SKU già esistenti nel database verranno automaticamente saltati per evitare duplicati.
+                  <strong>🛡️ Protezione Anti-Duplicati:</strong> Gli SKU già presenti nel database verranno automaticamente saltati. Ogni SKU può essere caricato una sola volta per garantire l'integrità dei dati.
                 </p>
                 <p className="text-sm text-green-700">
                   <strong>Prezzo vendita opzionale:</strong> I prodotti senza prezzo di vendita saranno caricati con valore €0,00.
@@ -385,7 +385,15 @@ export function InventoryDataUpload({ onDataUploaded, onClearInventory }: Invent
                       <p className="text-blue-700">Upload processato in {result.chunks} blocchi per ottimizzare le performance.</p>
                     )}
                     {result.skippedDuplicates > 0 && (
-                      <p className="text-orange-700">{result.skippedDuplicates} SKU già esistenti sono stati ignorati.</p>
+                      <Alert className="mt-3 bg-orange-50 border-orange-300">
+                        <AlertCircle className="h-4 w-4 text-orange-600" />
+                        <AlertDescription className="text-orange-800">
+                          <strong>⚠️ {result.skippedDuplicates} SKU duplicati ignorati</strong>
+                          <p className="text-sm mt-1">
+                            Questi prodotti esistevano già nel database e sono stati saltati per mantenere l'integrità dei dati.
+                          </p>
+                        </AlertDescription>
+                      </Alert>
                     )}
                   </div>
                 </div>

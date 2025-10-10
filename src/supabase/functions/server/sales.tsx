@@ -71,10 +71,40 @@ app.post('/sales/bulk', async (c) => {
       return c.json({ success: false, error: 'Sales data must be an array' }, 400);
     }
 
+    // Get existing sales to check for duplicates
+    console.log('Fetching existing sales to check for duplicates...');
+    const existingSalesData = await kv.getByPrefix('sale_');
+    console.log(`Found ${existingSalesData.length} existing sales`);
+    
+    // Create a Set of unique sale signatures (date+sku+quantity+amount)
+    const existingSalesSignatures = new Set(
+      existingSalesData.map((s: any) => {
+        const sale = s.value || s;
+        return `${sale.date}_${sale.productId || sale.sku}_${sale.quantity}_${sale.amount}`;
+      })
+    );
+    
+    console.log(`Created ${existingSalesSignatures.size} unique sale signatures from existing data`);
+
     const salesToSave: Record<string, SaleData> = {};
     const timestamp = Date.now();
+    let skippedDuplicates = 0;
+    let processedCount = 0;
     
     sales.forEach((sale: SaleData, index: number) => {
+      // Create signature for this sale
+      const saleSignature = `${sale.date}_${sale.sku}_${sale.quantity}_${sale.amount}`;
+      
+      // Check if this exact sale already exists
+      if (existingSalesSignatures.has(saleSignature)) {
+        console.log(`Skipping duplicate sale: ${saleSignature}`);
+        skippedDuplicates++;
+        return;
+      }
+      
+      // Add to set to check duplicates within this upload batch
+      existingSalesSignatures.add(saleSignature);
+      
       console.log(`Processing sale ${index}:`, sale);
       const saleId = `sale_${timestamp}_${index}`;
       salesToSave[saleId] = {
@@ -87,18 +117,27 @@ app.post('/sales/bulk', async (c) => {
         productId: sale.sku, // Use SKU as productId for now
         season: sale.season || 'autunno_inverno'
       };
+      processedCount++;
     });
 
     const keys = Object.keys(salesToSave);
-    console.log('Saving to KV store with keys:', keys);
+    console.log(`Saving ${keys.length} sales to KV store (skipped ${skippedDuplicates} duplicates)`);
     
-    await kv.mset(salesToSave);
-    console.log(`Successfully saved ${keys.length} sales records`);
+    if (keys.length > 0) {
+      await kv.mset(salesToSave);
+      console.log(`Successfully saved ${keys.length} sales records`);
+    }
+    
+    let message = `${processedCount} vendite caricate con successo`;
+    if (skippedDuplicates > 0) {
+      message += ` (${skippedDuplicates} vendite duplicate ignorate)`;
+    }
     
     return c.json({ 
       success: true, 
-      message: `${Object.keys(salesToSave).length} sales records saved`,
-      savedCount: Object.keys(salesToSave).length
+      message,
+      savedCount: processedCount,
+      skippedDuplicates
     });
   } catch (error) {
     console.error('Error saving bulk sales:', error);
