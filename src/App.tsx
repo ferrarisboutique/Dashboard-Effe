@@ -12,6 +12,7 @@ import { InventoryTableBasic } from "./components/InventoryTableBasic";
 import { EmptyState } from "./components/EmptyState";
 import { DataStatusDebug } from "./components/DataStatusDebug";
 import { SalesDiagnostics } from "./components/SalesDiagnostics";
+import { EmergencyDatabaseCleaner } from "./components/EmergencyDatabaseCleaner";
 import { ProcessedSaleData } from "./types/upload";
 import { ProcessedInventoryData } from "./types/inventory";
 import { Return } from "./types/dashboard";
@@ -89,6 +90,7 @@ export default function App() {
     { id: 'inventory', label: 'Inventario', icon: Package },
     { id: 'debug', label: 'Stato Dati', icon: AlertCircle },
     { id: 'diagnostics', label: 'Diagnostica Vendite', icon: BarChart3 },
+    { id: 'emergency-clean', label: '🆘 Pulizia Emergenza', icon: AlertCircle },
     { id: 'upload', label: 'Carica Dati', icon: Upload },
     { id: 'upload-inventory', label: 'Carica Inventario', icon: Upload },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
@@ -398,6 +400,16 @@ export default function App() {
             onDataFixed={async () => {
               await refreshSales();
               toast.success('Dashboard aggiornata con i dati corretti');
+            }}
+          />
+        );
+      
+      case 'emergency-clean':
+        return (
+          <EmergencyDatabaseCleaner 
+            onComplete={async () => {
+              await refreshSales();
+              await refreshInventory();
             }}
           />
         );
