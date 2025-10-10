@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Sale } from "../types/dashboard";
 import { InventoryItem } from "../types/inventory";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 interface DataStatusDebugProps {
   sales: Sale[];

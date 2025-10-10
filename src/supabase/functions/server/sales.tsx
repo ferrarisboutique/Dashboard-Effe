@@ -106,6 +106,34 @@ app.post('/sales/bulk', async (c) => {
   }
 });
 
+// Clear all sales data (MUST be before /sales/:id route)
+app.delete('/sales/all', async (c) => {
+  try {
+    console.log('🗑️ Starting sales data clear operation...');
+    
+    // Get all sales records
+    const salesData = await kv.getByPrefix('sale_');
+    const saleIds = salesData.map((sale: any) => sale.id);
+    
+    console.log(`Found ${saleIds.length} sales records to delete`);
+    
+    if (saleIds.length > 0) {
+      // Delete all sales records
+      await kv.mdel(saleIds);
+      console.log(`✅ Successfully deleted ${saleIds.length} sales records`);
+    }
+    
+    return c.json({ 
+      success: true, 
+      deletedCount: saleIds.length,
+      message: `Deleted ${saleIds.length} sales records`
+    });
+  } catch (error) {
+    console.error('❌ Error clearing sales:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
 // Save single sale
 app.post('/sales', async (c) => {
   try {
@@ -128,7 +156,7 @@ app.post('/sales', async (c) => {
   }
 });
 
-// Delete sale
+// Delete sale by ID
 app.delete('/sales/:id', async (c) => {
   try {
     const saleId = c.req.param('id');
@@ -322,34 +350,6 @@ app.post('/sales/fix-channels', async (c) => {
     });
   } catch (error) {
     console.error('❌ Error fixing channels:', error);
-    return c.json({ success: false, error: error.message }, 500);
-  }
-});
-
-// Clear all sales data
-app.delete('/sales/all', async (c) => {
-  try {
-    console.log('🗑️ Starting sales data clear operation...');
-    
-    // Get all sales records
-    const salesData = await kv.getByPrefix('sale_');
-    const saleIds = salesData.map((sale: any) => sale.id);
-    
-    console.log(`Found ${saleIds.length} sales records to delete`);
-    
-    if (saleIds.length > 0) {
-      // Delete all sales records
-      await kv.mdel(saleIds);
-      console.log(`✅ Successfully deleted ${saleIds.length} sales records`);
-    }
-    
-    return c.json({ 
-      success: true, 
-      deletedCount: saleIds.length,
-      message: `Deleted ${saleIds.length} sales records`
-    });
-  } catch (error) {
-    console.error('❌ Error clearing sales:', error);
     return c.json({ success: false, error: error.message }, 500);
   }
 });

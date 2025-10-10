@@ -9,7 +9,7 @@ import { processInventoryFile } from '../utils/fileParser';
 import { ProcessedInventoryData } from '../types/inventory';
 import { Upload, FileText, CheckCircle, AlertCircle, Package } from 'lucide-react';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 interface InventoryDataUploadProps {
   onDataUploaded: (data: ProcessedInventoryData[], onProgress?: (progress: number) => void) => Promise<{ success: boolean; result?: any }>;

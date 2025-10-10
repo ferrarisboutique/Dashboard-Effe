@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Upload, FileText, CheckCircle, AlertCircle, Download, Eye } from "lucide-react";
 import { processUploadedFile } from "../utils/fileParser";
 import { UploadResult, ProcessedSaleData, USER_STORE_MAPPING } from "../types/upload";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 interface StoreDataUploadProps {
   onDataUploaded: (data: ProcessedSaleData[]) => void;

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Sale } from '../types/dashboard';
 import { ProcessedSaleData } from '../types/upload';
 import { projectId, publicAnonKey } from '../utils/supabase/info';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 
 const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-49468be0`;
 
