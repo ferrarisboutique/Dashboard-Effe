@@ -33,3 +33,8 @@ build
 .env.production.local
 .env.development.local
 
+# Temporary scripts and tools
+delete-all-sales.js
+supabase
+supabase.tar.gz
+pulisci-database.html
