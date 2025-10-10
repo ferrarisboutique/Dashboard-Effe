@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulizia Database - Dashboard Effe</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        h1 {
+            color: #1a202c;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-description {
+            color: #4a5568;
+            font-size: 14px;
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+        button {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        button:hover:not(:disabled) {
+            background: #b91c1c;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.4);
+        }
+        button:disabled {
+            background: #cbd5e0;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+        .status.show {
+            display: block;
+        }
+        .status.success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #6ee7b7;
+        }
+        .status.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        .status.loading {
+            background: #dbeafe;
+            color: #1e40af;
+            border: 1px solid #93c5fd;
+        }
+        .icon {
+            width: 20px;
+            height: 20px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .warning-box {
+            background: #fef3c7;
+            border: 2px solid #fbbf24;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        .warning-box strong {
+            color: #92400e;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .warning-box p {
+            color: #78350f;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Pulizia Database</h1>
+        <p class="subtitle">Rimuovi tutti i dati dal database per ricominciare da zero</p>
+        
+        <div class="warning-box">
+            <strong>⚠️ Attenzione</strong>
+            <p>Questa operazione è irreversibile. Una volta cancellati, i dati non potranno essere recuperati. Assicurati di aver salvato eventuali backup prima di procedere.</p>
+        </div>
+
+        <!-- Cancella Vendite -->
+        <div class="card">
+            <div class="card-title">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+                Cancella Vendite
+            </div>
+            <p class="card-description">
+                Rimuovi tutti i record di vendita dal database. Questa operazione cancellerà tutte le transazioni caricate, inclusi i 1000 record con canale UNDEFINED.
+            </p>
+            <button id="clear-sales-btn" onclick="clearSales()">
+                Cancella Tutte le Vendite
+            </button>
+            <div id="sales-status" class="status"></div>
+        </div>
+
+        <!-- Cancella Inventario -->
+        <div class="card">
+            <div class="card-title">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                </svg>
+                Cancella Inventario
+            </div>
+            <p class="card-description">
+                Rimuovi tutti i prodotti dall'inventario. Puoi poi ricaricare un nuovo file inventario aggiornato.
+            </p>
+            <button id="clear-inventory-btn" onclick="clearInventory()">
+                Cancella Tutto l'Inventario
+            </button>
+            <div id="inventory-status" class="status"></div>
+        </div>
+
+        <!-- Cancella Tutto -->
+        <div class="card" style="border-color: #dc2626;">
+            <div class="card-title" style="color: #dc2626;">
+                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                Cancella Tutto il Database
+            </div>
+            <p class="card-description">
+                Operazione completa: rimuove TUTTI i dati (vendite + inventario) dal database. Usa questa opzione per azzerare completamente la dashboard.
+            </p>
+            <button id="clear-all-btn" onclick="clearAll()">
+                Cancella Tutto (Vendite + Inventario)
+            </button>
+            <div id="all-status" class="status"></div>
+        </div>
+    </div>
+
+    <script>
+        const PROJECT_ID = 'sbtkymupbjyikfwjeumk';
+        const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNidGt5bXVwYmp5aWtmd2pldW1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MDA0MTUsImV4cCI6MjA3NDQ3NjQxNX0.ONl5r0x89QJKQtP9jttBkvESpV6lDpc1ijydxtP7nzo';
+        const API_BASE = `https://${PROJECT_ID}.supabase.co/functions/v1/make-server-49468be0`;
+
+        function showStatus(elementId, type, message) {
+            const el = document.getElementById(elementId);
+            el.className = `status show ${type}`;
+            el.innerHTML = type === 'loading' 
+                ? `<span class="spinner"></span> ${message}`
+                : message;
+        }
+
+        function hideStatus(elementId) {
+            const el = document.getElementById(elementId);
+            el.className = 'status';
+        }
+
+        async function clearSales() {
+            if (!confirm('Sei ASSOLUTAMENTE SICURO di voler cancellare TUTTE le vendite? Questa azione NON può essere annullata!')) {
+                return;
+            }
+
+            const btn = document.getElementById('clear-sales-btn');
+            btn.disabled = true;
+            showStatus('sales-status', 'loading', 'Cancellazione in corso...');
+
+            try {
+                const response = await fetch(`${API_BASE}/sales/all`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showStatus('sales-status', 'success', 
+                        `✅ Successo! ${result.deletedCount || 0} vendite cancellate. Ricarica la dashboard per vedere i cambiamenti.`);
+                } else {
+                    showStatus('sales-status', 'error', 
+                        `❌ Errore: ${result.error || 'Operazione fallita'}`);
+                }
+            } catch (error) {
+                showStatus('sales-status', 'error', 
+                    `❌ Errore di connessione: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function clearInventory() {
+            if (!confirm('Sei ASSOLUTAMENTE SICURO di voler cancellare TUTTO l\'inventario? Questa azione NON può essere annullata!')) {
+                return;
+            }
+
+            const btn = document.getElementById('clear-inventory-btn');
+            btn.disabled = true;
+            showStatus('inventory-status', 'loading', 'Cancellazione in corso...');
+
+            try {
+                const response = await fetch(`${API_BASE}/inventory`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showStatus('inventory-status', 'success', 
+                        `✅ Successo! ${result.deletedCount || 0} prodotti cancellati. Ricarica la dashboard per vedere i cambiamenti.`);
+                } else {
+                    showStatus('inventory-status', 'error', 
+                        `❌ Errore: ${result.error || 'Operazione fallita'}`);
+                }
+            } catch (error) {
+                showStatus('inventory-status', 'error', 
+                    `❌ Errore di connessione: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function clearAll() {
+            if (!confirm('⚠️ ULTIMA CONFERMA ⚠️\n\nStai per cancellare TUTTI i dati del database (vendite + inventario).\n\nQuest\'azione è IRREVERSIBILE!\n\nVuoi davvero procedere?')) {
+                return;
+            }
+
+            const btn = document.getElementById('clear-all-btn');
+            btn.disabled = true;
+            showStatus('all-status', 'loading', 'Cancellazione di tutte le vendite...');
+
+            try {
+                // Cancella vendite
+                const salesResponse = await fetch(`${API_BASE}/sales/all`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const salesResult = await salesResponse.json();
+
+                if (!salesResponse.ok || !salesResult.success) {
+                    throw new Error(`Errore cancellazione vendite: ${salesResult.error || 'Sconosciuto'}`);
+                }
+
+                showStatus('all-status', 'loading', 
+                    `✅ ${salesResult.deletedCount || 0} vendite cancellate. Cancellazione inventario...`);
+
+                // Piccola pausa
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Cancella inventario
+                const inventoryResponse = await fetch(`${API_BASE}/inventory`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${ANON_KEY}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const inventoryResult = await inventoryResponse.json();
+
+                if (!inventoryResponse.ok || !inventoryResult.success) {
+                    throw new Error(`Errore cancellazione inventario: ${inventoryResult.error || 'Sconosciuto'}`);
+                }
+
+                showStatus('all-status', 'success', 
+                    `✅ COMPLETATO! ${salesResult.deletedCount || 0} vendite e ${inventoryResult.deletedCount || 0} prodotti cancellati. Database pulito! Ricarica la dashboard.`);
+
+            } catch (error) {
+                showStatus('all-status', 'error', 
+                    `❌ ${error.message}`);
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
+
