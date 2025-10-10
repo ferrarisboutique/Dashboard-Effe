@@ -123,10 +123,14 @@ export function InventoryTableSimple({
         <CardTitle className="flex items-center justify-between">
           Inventario Prodotti
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              {pagination.total} prodotti mostrati
-              {pagination.total > 1000 && " • Usa filtri per cercare più velocemente"}
-            </span>
+            <Badge variant="secondary" className="text-lg font-bold">
+              {pagination.total.toLocaleString()} prodotti totali
+            </Badge>
+            {pagination.total > 1000 && (
+              <span className="text-xs text-muted-foreground">
+                • Usa filtri per cercare
+              </span>
+            )}
             <Button 
               variant="outline" 
               size="sm"
@@ -189,27 +193,29 @@ export function InventoryTableSimple({
           
           {/* Action Buttons */}
           <div className="flex gap-2">
-            <Button onClick={handleSearch} size="sm">
-              Cerca
+            <Button onClick={handleSearch} size="sm" variant="default">
+              🔍 Cerca
             </Button>
             <Button variant="outline" onClick={clearFilters} size="sm">
-              Reset
-            </Button>
-            <Button 
-              variant="secondary" 
-              onClick={() => {
-                setSearchTerm('');
-                setBrandFilter('all');
-                setCategoryFilter('all');
-                setCurrentPage(1);
-                onRefresh({ page: 1, limit: 100 }); // Load more items per page
-              }} 
-              size="sm"
-            >
-              Mostra Più
+              ↺ Reset
             </Button>
           </div>
         </div>
+        
+        {/* Info Banner for Large Inventories */}
+        {pagination.total > 1000 && (
+          <div className="px-6 pb-2">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+              <div className="flex items-start gap-2">
+                <div className="text-blue-600 font-semibold">ℹ️ Inventario Completo Caricato</div>
+              </div>
+              <p className="text-blue-700 mt-1">
+                Tutti i <strong>{pagination.total.toLocaleString()} prodotti</strong> sono salvati nel database. 
+                Usa la <strong>paginazione</strong> sotto la tabella per navigare, oppure usa i <strong>filtri</strong> sopra per cercare prodotti specifici.
+              </p>
+            </div>
+          </div>
+        )}
       </CardHeader>
       
       <CardContent>
@@ -297,9 +303,9 @@ export function InventoryTableSimple({
         {/* Simple Pagination */}
         {pagination.totalPages > 1 && (
           <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Pagina {pagination.page} di {pagination.totalPages} • 
-              Mostrando {inventory.length} di {pagination.total} prodotti
+            <div className="text-sm font-medium">
+              Pagina <Badge variant="outline">{pagination.page}</Badge> di <Badge variant="outline">{pagination.totalPages}</Badge> • 
+              Mostrando <span className="font-bold">{inventory.length}</span> di <span className="font-bold text-blue-600">{pagination.total.toLocaleString()}</span> prodotti totali
             </div>
             
             <div className="flex items-center gap-2">
