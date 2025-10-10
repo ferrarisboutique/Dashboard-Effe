@@ -9,6 +9,7 @@ import { DashboardOverview } from "./components/DashboardOverview";
 import { StoresSection } from "./components/StoresSection";
 import { OnlineSection } from "./components/OnlineSection";
 import { InventoryTableBasic } from "./components/InventoryTableBasic";
+import { InventoryTableSimple } from "./components/InventoryTableSimple";
 import { EmptyState } from "./components/EmptyState";
 import { DataStatusDebug } from "./components/DataStatusDebug";
 import { SalesDiagnostics } from "./components/SalesDiagnostics";
@@ -334,7 +335,13 @@ export default function App() {
                 </Button>
               </div>
             </div>
-            <InventoryTableBasic inventory={inventory} />
+            <InventoryTableSimple 
+              inventory={inventory} 
+              loading={inventoryLoading}
+              pagination={pagination}
+              filters={filters}
+              onRefresh={refreshInventory}
+            />
           </div>
         );
       
