@@ -100,6 +100,8 @@ export default function App() {
       const success = await uploadSales(data);
       if (success) {
         toast.success('Dati di vendita caricati con successo!');
+        // Force refresh to get the newly uploaded sales data
+        await refreshSales();
         setActiveSection('overview');
       }
     } catch (error) {
@@ -116,6 +118,8 @@ export default function App() {
       const result = await uploadInventory(data, onProgress);
       if (result.success) {
         toast.success('Inventario caricato con successo!');
+        // Force refresh to get the newly uploaded inventory data
+        await refreshInventory();
         setActiveSection('inventory');
         return { success: true, message: 'Upload completato' };
       } else {
