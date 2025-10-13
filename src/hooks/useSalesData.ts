@@ -214,28 +214,96 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
     refreshSales,
     clearSales,
     fetchOrphans: async () => {
-      const resp = await fetch(`${API_BASE_URL}/sales/orphans`, { headers: { 'Authorization': `Bearer ${publicAnonKey}` } });
-      const r = await resp.json();
-      return r.data || [];
+      try {
+        setLoading(true);
+        const resp = await fetch(`${API_BASE_URL}/sales/orphans`, { 
+          headers: { 'Authorization': `Bearer ${publicAnonKey}` } 
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+        }
+        
+        const result = await resp.json();
+        
+        if (result.success) {
+          return result.data || [];
+        } else {
+          throw new Error(result.error || 'Failed to fetch orphans');
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error fetching orphans';
+        setError(errorMsg);
+        toast.error('Errore nel caricamento vendite orfane');
+        return [];
+      } finally {
+        setLoading(false);
+      }
     },
     bulkUpdateSales: async (updates) => {
-      const resp = await fetch(`${API_BASE_URL}/sales/bulk-update`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates })
-      });
-      const r = await resp.json();
-      if (r.success) { await fetchSales(); return true; }
-      return false;
+      try {
+        setLoading(true);
+        const resp = await fetch(`${API_BASE_URL}/sales/bulk-update`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${publicAnonKey}`, 
+            'Content-Type': 'application/json' 
+          },
+          body: JSON.stringify({ updates })
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+        }
+        
+        const result = await resp.json();
+        
+        if (result.success) {
+          toast.success(`${result.updated || 0} vendite aggiornate con successo`);
+          await fetchSales(); // Reload to get fresh data
+          return true;
+        } else {
+          throw new Error(result.error || 'Failed to update sales');
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error updating sales';
+        setError(errorMsg);
+        toast.error('Errore nell\'aggiornamento vendite');
+        return false;
+      } finally {
+        setLoading(false);
+      }
     },
     learnMappings: async (payload) => {
-      const resp = await fetch(`${API_BASE_URL}/sales/learn`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${publicAnonKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const r = await resp.json();
-      return !!r.success;
+      try {
+        const resp = await fetch(`${API_BASE_URL}/sales/learn`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${publicAnonKey}`, 
+            'Content-Type': 'application/json' 
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+        }
+        
+        const result = await resp.json();
+        
+        if (result.success) {
+          const count = result.learned || 0;
+          toast.success(`${count} mapping salvati! Verranno applicati ai prossimi upload.`);
+          return true;
+        } else {
+          throw new Error(result.error || 'Failed to learn mappings');
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error learning mappings';
+        setError(errorMsg);
+        toast.error('Errore nel salvataggio mapping');
+        return false;
+      }
     },
   };
 }
