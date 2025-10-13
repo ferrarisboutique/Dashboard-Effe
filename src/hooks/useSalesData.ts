@@ -10,7 +10,7 @@ export interface UseSalesDataReturn {
   sales: Sale[];
   loading: boolean;
   error: string | null;
-  uploadSales: (salesData: ProcessedSaleData[]) => Promise<boolean>;
+  uploadSales: (salesData: ProcessedSaleData[], onProgress?: (progress: number) => void) => Promise<boolean>;
   refreshSales: () => Promise<void>;
   clearSales: () => Promise<boolean>;
   fetchOrphans: () => Promise<any[]>;
@@ -91,45 +91,103 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
     }
   }, []);
 
-  const uploadSales = useCallback(async (salesData: ProcessedSaleData[]): Promise<boolean> => {
+  const uploadSales = useCallback(async (
+    salesData: ProcessedSaleData[],
+    onProgress?: (progress: number) => void
+  ): Promise<boolean> => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const convertedSales = salesData.map(convertToSaleFormat);
-      const requestBody = { sales: convertedSales };
-      
-      const response = await fetch(`${API_BASE_URL}/sales/bulk`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to upload sales: ${response.status} ${response.statusText}. Details: ${errorText}`);
+      // For large datasets, use chunked upload
+      const CHUNK_SIZE = 500; // Upload 500 sales at a time
+      const totalChunks = Math.ceil(convertedSales.length / CHUNK_SIZE);
+
+      if (totalChunks > 1) {
+        toast.info(`Caricamento di ${convertedSales.length} vendite in ${totalChunks} blocchi...`);
       }
 
-      const result = await response.json();
-      
-      if (result.success) {
-        let message = `${result.savedCount || salesData.length} vendite caricate con successo!`;
-        if (result.skippedDuplicates && result.skippedDuplicates > 0) {
-          toast.warning(`${message}\n⚠️ ${result.skippedDuplicates} vendite duplicate sono state ignorate.`);
-        } else {
-          toast.success(message);
+      let totalSaved = 0;
+      let totalDuplicates = 0;
+
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, convertedSales.length);
+        const chunk = convertedSales.slice(start, end);
+
+        // Update progress
+        if (onProgress) {
+          const progress = ((chunkIndex + 1) / totalChunks) * 100;
+          onProgress(Math.min(progress, 99)); // Keep at 99% until final refresh
         }
-        await fetchSales();
-        return true;
-      } else {
-        throw new Error(result.error || 'Failed to upload sales data');
+
+        const requestBody = { sales: chunk };
+
+        // Add timeout for large uploads (2 minutes per chunk)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/sales/bulk`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to upload chunk ${chunkIndex + 1}/${totalChunks}: ${response.status} ${response.statusText}. Details: ${errorText}`);
+          }
+
+          const result = await response.json();
+
+          if (result.success) {
+            totalSaved += (result.savedCount || chunk.length);
+            totalDuplicates += (result.skippedDuplicates || 0);
+          } else {
+            throw new Error(result.error || `Failed to upload chunk ${chunkIndex + 1}/${totalChunks}`);
+          }
+        } catch (chunkError) {
+          clearTimeout(timeoutId);
+          if (chunkError.name === 'AbortError') {
+            throw new Error(`Timeout durante l'upload del blocco ${chunkIndex + 1}/${totalChunks}. Il file è troppo grande o la connessione è lenta.`);
+          }
+          throw chunkError;
+        }
+
+        // Show progress toast for multi-chunk uploads
+        if (totalChunks > 1 && chunkIndex < totalChunks - 1) {
+          toast.info(`Blocco ${chunkIndex + 1}/${totalChunks} completato...`);
+        }
       }
+
+      // Final success message
+      let message = `${totalSaved} vendite caricate con successo!`;
+      if (totalDuplicates > 0) {
+        toast.warning(`${message}\n⚠️ ${totalDuplicates} vendite duplicate sono state ignorate.`);
+      } else {
+        toast.success(message);
+      }
+
+      // Refresh sales data
+      await fetchSales();
+
+      if (onProgress) {
+        onProgress(100);
+      }
+
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
-      toast.error('Errore nel caricamento delle vendite');
+      toast.error(`Errore nel caricamento delle vendite: ${err instanceof Error ? err.message : 'Unknown error'}`);
       return false;
     } finally {
       setLoading(false);
