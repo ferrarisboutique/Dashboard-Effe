@@ -126,6 +126,10 @@ export default function App() {
   const hasInventoryData = inventory.length > 0;
   const hasAnyData = hasSalesData || hasInventoryData;
 
+  // Get total counts (use pagination.total for inventory to get real count)
+  const totalInventoryCount = pagination.total || inventory.length;
+  const totalSalesCount = sales.length;
+
   // Mock returns data for now (you can implement this later)
   const returns: Return[] = [];
 
@@ -163,7 +167,7 @@ export default function App() {
                 <Package className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                 <h2 className="mb-2">Inventario Caricato!</h2>
                 <p className="text-muted-foreground mb-6 max-w-lg mx-auto">
-                  Hai caricato {inventory.length} prodotti nell'inventario, ma per vedere la dashboard completa 
+                  Hai caricato {totalInventoryCount} prodotti nell'inventario, ma per vedere la dashboard completa
                   devi anche caricare i dati di vendita dei tuoi negozi.
                 </p>
                 <div className="flex gap-3 justify-center">
@@ -185,6 +189,7 @@ export default function App() {
                   returns={returns}
                   inventory={inventory}
                   dateRange={dateRange}
+                  totalInventoryCount={totalInventoryCount}
                 />
               </div>
             </div>
@@ -197,6 +202,7 @@ export default function App() {
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}
+            totalInventoryCount={totalInventoryCount}
           />
         );
       
@@ -435,7 +441,7 @@ export default function App() {
                         {hasInventoryData ? (
                           <Badge variant="secondary" className="ml-auto">
                             <CheckCircle className="w-3 h-3 mr-1" />
-                            {inventory.length} prodotti
+                            {totalInventoryCount} prodotti
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="ml-auto">
@@ -534,14 +540,14 @@ export default function App() {
                             <div>
                               <p className="font-medium">Cancella Inventario</p>
                               <p className="text-sm text-muted-foreground">
-                                Rimuovi tutti i {inventory.length} prodotti
+                                Rimuovi tutti i {totalInventoryCount} prodotti
                               </p>
                             </div>
-                            <Button 
+                            <Button
                               variant="destructive"
                               size="sm"
                               onClick={async () => {
-                                if (confirm(`Sei sicuro di voler cancellare tutto l'inventario con ${inventory.length} prodotti? Questa azione non può essere annullata.`)) {
+                                if (confirm(`Sei sicuro di voler cancellare tutto l'inventario con ${totalInventoryCount} prodotti? Questa azione non può essere annullata.`)) {
                                   const success = await clearInventory();
                                   if (success) {
                                     toast.success('Inventario cancellato');
@@ -644,7 +650,7 @@ export default function App() {
                       {/* Show data indicators */}
                       {item.id === 'overview' && hasAnyData && (
                         <Badge variant="secondary" className="ml-auto text-xs">
-                          {sales.length + inventory.length}
+                          {totalSalesCount + totalInventoryCount}
                         </Badge>
                       )}
                       {item.id === 'stores' && hasSalesData && (
@@ -654,7 +660,7 @@ export default function App() {
                       )}
                       {item.id === 'inventory' && hasInventoryData && (
                         <Badge variant="secondary" className="ml-auto text-xs">
-                          {inventory.length}
+                          {totalInventoryCount}
                         </Badge>
                       )}
                     </SidebarMenuButton>

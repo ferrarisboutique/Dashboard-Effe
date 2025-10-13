@@ -11,9 +11,10 @@ interface DashboardOverviewProps {
   returns: Return[];
   inventory: InventoryItem[];
   dateRange: string;
+  totalInventoryCount?: number;
 }
 
-export function DashboardOverview({ sales, returns, inventory, dateRange }: DashboardOverviewProps) {
+export function DashboardOverview({ sales, returns, inventory, dateRange, totalInventoryCount }: DashboardOverviewProps) {
   // Apply date filter to sales and returns
   const filteredSales = filterDataByDateRange(sales, dateRange);
   const filteredReturns = filterDataByDateRange(returns, dateRange);
@@ -153,7 +154,7 @@ export function DashboardOverview({ sales, returns, inventory, dateRange }: Dash
             />
             <MetricCard
               title="Prodotti in Inventario"
-              value={inventory.length}
+              value={totalInventoryCount || inventory.length}
               description="Totale prodotti caricati"
             />
           </div>
