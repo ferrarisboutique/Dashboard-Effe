@@ -36,9 +36,8 @@ import { Badge } from "./components/ui/badge";
 export default function App() {
   const [activeSection, setActiveSection] = useState('overview');
   const [dateRange, setDateRange] = useState('all');
-  const [dataLoadAttempted, setDataLoadAttempted] = useState(false);
   
-  // Use hooks with autoLoad disabled to prevent immediate loading
+  // Use hooks with autoLoad enabled for production
   const { 
     sales, 
     loading: salesLoading, 
@@ -46,7 +45,7 @@ export default function App() {
     uploadSales, 
     refreshSales,
     clearSales
-  } = useSalesData(false);
+  } = useSalesData(true);
   
   const { 
     inventory, 
@@ -57,27 +56,7 @@ export default function App() {
     refreshInventory, 
     uploadInventory, 
     clearInventory 
-  } = useInventoryData(false);
-
-  // Check for existing data on mount
-  useEffect(() => {
-    if (dataLoadAttempted) return;
-    
-    setDataLoadAttempted(true);
-    
-    const loadData = async () => {
-      try {
-        await Promise.all([
-          refreshSales(),
-          refreshInventory()
-        ]);
-      } catch (error) {
-        // Error handling is done in hooks
-      }
-    };
-
-    loadData();
-  }, [dataLoadAttempted, refreshSales, refreshInventory]);
+  } = useInventoryData(true);
 
   const sidebarItems = [
     { id: 'overview', label: 'Panoramica', icon: Home },

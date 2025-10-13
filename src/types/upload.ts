@@ -9,7 +9,7 @@ export interface StoreUploadRow {
 export interface ProcessedSaleData {
   date: string;
   user: string;
-  channel: 'negozio_donna' | 'negozio_uomo';
+  channel: 'negozio_donna' | 'negozio_uomo' | 'ecommerce' | 'marketplace';
   sku: string;
   quantity: number;
   price: number;
@@ -24,8 +24,20 @@ export interface UploadResult {
   validRows: number;
 }
 
-export const USER_STORE_MAPPING: Record<string, 'negozio_donna' | 'negozio_uomo'> = {
+export const USER_STORE_MAPPING: Record<string, 'negozio_donna' | 'negozio_uomo' | 'ecommerce' | 'marketplace'> = {
+  // Negozi fisici
   'carla': 'negozio_donna',
   'alexander': 'negozio_uomo',
-  'paolo': 'negozio_uomo'
+  'paolo': 'negozio_uomo',
+  // E-commerce
+  'admin': 'ecommerce',
+  'online': 'ecommerce',
+  'shop': 'ecommerce',
+  'ecommerce': 'ecommerce',
+  // Marketplace
+  'amazon': 'marketplace',
+  'zalando': 'marketplace',
+  'farfetch': 'marketplace',
+  'ebay': 'marketplace',
+  'marketplace': 'marketplace',
 };
