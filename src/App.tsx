@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
@@ -8,13 +8,8 @@ import { InventoryDataUpload } from "./components/InventoryDataUpload";
 import { DashboardOverview } from "./components/DashboardOverview";
 import { StoresSection } from "./components/StoresSection";
 import { OnlineSection } from "./components/OnlineSection";
-import { InventoryTableBasic } from "./components/InventoryTableBasic";
 import { InventoryTableSimple } from "./components/InventoryTableSimple";
 import { EmptyState } from "./components/EmptyState";
-import { DataStatusDebug } from "./components/DataStatusDebug";
-import { SalesDiagnostics } from "./components/SalesDiagnostics";
-import { EmergencyDatabaseCleaner } from "./components/EmergencyDatabaseCleaner";
-import { InventoryVerifier } from "./components/InventoryVerifier";
 import { ProcessedSaleData } from "./types/upload";
 import { ProcessedInventoryData } from "./types/inventory";
 import { Return } from "./types/dashboard";
@@ -30,9 +25,9 @@ import {
   Calendar,
   Upload,
   RefreshCw,
+  ShoppingCart,
   AlertCircle,
-  CheckCircle,
-  ShoppingCart
+  CheckCircle
 } from "lucide-react";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
@@ -69,18 +64,15 @@ export default function App() {
     if (dataLoadAttempted) return;
     
     setDataLoadAttempted(true);
-    console.log('🔍 Checking for existing data...');
     
     const loadData = async () => {
       try {
-        // Load both sales and inventory data
         await Promise.all([
           refreshSales(),
           refreshInventory()
         ]);
-        console.log('✅ Data check completed');
       } catch (error) {
-        console.error('❌ Error checking existing data:', error);
+        // Error handling is done in hooks
       }
     };
 
@@ -92,11 +84,8 @@ export default function App() {
     { id: 'stores', label: 'Negozi', icon: Store },
     { id: 'online', label: 'Online', icon: Globe },
     { id: 'inventory', label: 'Inventario', icon: Package },
-    { id: 'debug', label: 'Stato Dati', icon: AlertCircle },
-    { id: 'diagnostics', label: 'Diagnostica Vendite', icon: BarChart3 },
-    { id: 'verify-inventory', label: '🔍 Verifica Inventario', icon: CheckCircle },
-    { id: 'emergency-clean', label: '🆘 Pulizia Emergenza', icon: AlertCircle },
-    { id: 'upload', label: 'Carica Dati', icon: Upload },
+    { id: 'data-quality', label: 'Qualità Dati', icon: AlertCircle },
+    { id: 'upload', label: 'Carica Vendite', icon: Upload },
     { id: 'upload-inventory', label: 'Carica Inventario', icon: Upload },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'settings', label: 'Impostazioni', icon: Settings },
@@ -153,11 +142,6 @@ export default function App() {
   const hasSalesData = sales.length > 0;
   const hasInventoryData = inventory.length > 0;
   const hasAnyData = hasSalesData || hasInventoryData;
-  
-  // Check for data quality issues - solo se ci sono effettivamente vendite
-  const validChannels = ['negozio_donna', 'negozio_uomo', 'ecommerce', 'marketplace'];
-  const problematicSalesCount = sales.filter(s => !validChannels.includes(s.channel)).length;
-  const hasDataQualityIssues = problematicSalesCount > 0 && sales.length > 0;
 
   // Mock returns data for now (you can implement this later)
   const returns: Return[] = [];
@@ -182,10 +166,6 @@ export default function App() {
                   <Button variant="outline" onClick={() => setActiveSection('upload-inventory')}>
                     Carica Inventario
                   </Button>
-                  <Button variant="outline" onClick={() => setActiveSection('debug')}>
-                    <AlertCircle className="w-4 h-4 mr-2" />
-                    Verifica Stato Dati
-                  </Button>
                 </div>
               }
             />
@@ -207,10 +187,6 @@ export default function App() {
                   <Button onClick={() => setActiveSection('upload')}>
                     <ShoppingCart className="w-4 h-4 mr-2" />
                     Carica Dati Vendita
-                  </Button>
-                  <Button variant="outline" onClick={() => setActiveSection('debug')}>
-                    <AlertCircle className="w-4 h-4 mr-2" />
-                    Verifica Stato Dati
                   </Button>
                 </div>
               </div>
@@ -238,7 +214,6 @@ export default function App() {
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}
-            onNavigateToDiagnostics={() => setActiveSection('diagnostics')}
           />
         );
       
@@ -394,40 +369,6 @@ export default function App() {
           />
         );
       
-      case 'debug':
-        return (
-          <DataStatusDebug
-            sales={sales}
-            inventory={inventory}
-            onNavigateToUpload={() => setActiveSection('upload')}
-            onNavigateToInventoryUpload={() => setActiveSection('upload-inventory')}
-            onNavigateToDiagnostics={() => setActiveSection('diagnostics')}
-          />
-        );
-      
-      case 'diagnostics':
-        return (
-          <SalesDiagnostics 
-            onDataFixed={async () => {
-              await refreshSales();
-              toast.success('Dashboard aggiornata con i dati corretti');
-            }}
-          />
-        );
-      
-      case 'verify-inventory':
-        return <InventoryVerifier />;
-      
-      case 'emergency-clean':
-        return (
-          <EmergencyDatabaseCleaner 
-            onComplete={async () => {
-              await refreshSales();
-              await refreshInventory();
-            }}
-          />
-        );
-      
       case 'analytics':
         return (
           <Card>
@@ -448,6 +389,25 @@ export default function App() {
             </CardContent>
           </Card>
         );
+      case 'data-quality':
+        {
+          const LazyDataQuality = lazy(() => import('./components/DataQualityManager').then(m => ({ default: m.DataQualityManager })));
+          return (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Qualità Dati</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">Correggi brand/canale mancanti e addestra il sistema.</p>
+                  <Suspense fallback={<div>Caricamento...</div>}>
+                    <LazyDataQuality />
+                  </Suspense>
+                </CardContent>
+              </Card>
+            </div>
+          );
+        }
       
       case 'settings':
         return (
@@ -714,16 +674,6 @@ export default function App() {
                           {inventory.length}
                         </Badge>
                       )}
-                      {item.id === 'debug' && (!hasSalesData || !hasInventoryData) && (
-                        <Badge variant="destructive" className="ml-auto text-xs">
-                          !
-                        </Badge>
-                      )}
-                      {item.id === 'diagnostics' && hasSalesData && (
-                        <Badge variant="outline" className="ml-auto text-xs">
-                          <BarChart3 className="w-3 h-3" />
-                        </Badge>
-                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -745,25 +695,6 @@ export default function App() {
                     <RefreshCw className="w-3 h-3 animate-spin" />
                     Caricamento...
                   </div>
-                )}
-                
-                {(salesError || inventoryError) && (
-                  <Badge variant="destructive" className="text-xs">
-                    <AlertCircle className="w-3 h-3 mr-1" />
-                    Errore
-                  </Badge>
-                )}
-                
-                {hasDataQualityIssues && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setActiveSection('diagnostics')}
-                    className="border-orange-500 text-orange-700 hover:bg-orange-50"
-                  >
-                    <AlertCircle className="w-4 h-4 mr-2" />
-                    {problematicSalesCount} Vendite da Correggere
-                  </Button>
                 )}
                 
                 <div className="flex items-center gap-2">

@@ -1,13 +1,16 @@
 export interface Sale {
   id: string;
   date: string;
+  user?: string;
   amount: number;
   channel: 'negozio_donna' | 'negozio_uomo' | 'ecommerce' | 'marketplace';
   marketplace?: string;
   brand: string;
   category: 'abbigliamento' | 'calzature' | 'accessori' | 'borse';
+  sku?: string;
   productId: string;
   quantity: number;
+  price?: number;
   season: 'primavera_estate' | 'autunno_inverno';
 }
 

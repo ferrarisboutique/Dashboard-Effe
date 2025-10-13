@@ -1,10 +1,13 @@
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { MetricCard } from "./MetricCard";
 import { SalesChart } from "./SalesChart";
 import { Sale, Return } from "../types/dashboard";
 import { InventoryItem } from "../types/inventory";
-import { calculateMetrics, getSalesByDate, getCategoryData, getBrandData, filterDataByDateRange } from "../utils/analytics";
+import { calculateMetrics, getSalesByDate, getCategoryData, getBrandData, filterDataByDateRange, getMonthlySalesWithYOY, getSeasonData, getYoYForRange, filterDataByDateAdvanced } from "../utils/analytics";
+import { DateRange } from "react-day-picker";
+import { Input } from "./ui/input";
 import { Store, Users, ShoppingBag, TrendingUp } from "lucide-react";
 
 interface StoresSectionProps {
@@ -15,9 +18,11 @@ interface StoresSectionProps {
 }
 
 export function StoresSection({ sales, returns, inventory, dateRange }: StoresSectionProps) {
+  const [customStart, setCustomStart] = React.useState<string | undefined>(undefined);
+  const [customEnd, setCustomEnd] = React.useState<string | undefined>(undefined);
   // Apply date filter first
-  const filteredSales = filterDataByDateRange(sales, dateRange);
-  const filteredReturns = filterDataByDateRange(returns, dateRange);
+  const filteredSales = filterDataByDateAdvanced(sales, dateRange, customStart, customEnd);
+  const filteredReturns = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
   
   const allMetrics = calculateMetrics(filteredSales, filteredReturns, inventory);
   
@@ -35,6 +40,12 @@ export function StoresSection({ sales, returns, inventory, dateRange }: StoresSe
   
   const womenCategoryData = getCategoryData(womenStoreSales);
   const menCategoryData = getCategoryData(menStoreSales);
+  const womenSeasonData = getSeasonData(womenStoreSales);
+  const menSeasonData = getSeasonData(menStoreSales);
+
+  // Monthly with YoY
+  const womenMonthlyYOY = getMonthlySalesWithYOY(womenStoreSales, 12).map(s => ({ name: s.label, current: s.current, previous: s.previous }));
+  const menMonthlyYOY = getMonthlySalesWithYOY(menStoreSales, 12).map(s => ({ name: s.label, current: s.current, previous: s.previous }));
 
   return (
     <div className="space-y-6">
@@ -43,34 +54,69 @@ export function StoresSection({ sales, returns, inventory, dateRange }: StoresSe
           <Store className="w-6 h-6" />
           Negozi Fisici
         </h2>
+        {dateRange === 'custom' && (
+          <div className="flex items-center gap-2 mb-4">
+            <Input type="date" value={customStart || ''} onChange={(e) => setCustomStart(e.target.value)} />
+            <span>→</span>
+            <Input type="date" value={customEnd || ''} onChange={(e) => setCustomEnd(e.target.value)} />
+          </div>
+        )}
       </div>
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          title="Vendite Totali Negozi"
-          value={allMetrics.salesByChannel.negozio_donna + allMetrics.salesByChannel.negozio_uomo}
-          prefix="€"
-          change={8.2}
-          changeType="increase"
-          description="Ultimi 7 giorni"
-        />
-        <MetricCard
-          title="Negozio Donna"
-          value={allMetrics.salesByChannel.negozio_donna}
-          prefix="€"
-          change={12.5}
-          changeType="increase"
-          badge="Top performer"
-          badgeVariant="secondary"
-        />
-        <MetricCard
-          title="Negozio Uomo"
-          value={allMetrics.salesByChannel.negozio_uomo}
-          prefix="€"
-          change={-5.3}
-          changeType="decrease"
-        />
+        {(() => {
+          // YoY change for selected range or last month fallback
+          let yoy = 0;
+          if (dateRange === 'custom' && customStart && customEnd) {
+            const r = getYoYForRange(filteredSales, customStart, customEnd);
+            yoy = r.changePct;
+          } else {
+            const months = getMonthlySalesWithYOY(filteredSales.filter(s => s.channel === 'negozio_donna' || s.channel === 'negozio_uomo'), 12);
+            const last = months[months.length - 1];
+            yoy = last && last.previous > 0 ? ((last.current - last.previous) / last.previous) * 100 : 0;
+          }
+          return (
+            <MetricCard
+              title="Vendite Totali Negozi"
+              value={allMetrics.salesByChannel.negozio_donna + allMetrics.salesByChannel.negozio_uomo}
+              prefix="€"
+              change={Number(yoy.toFixed(1))}
+              changeType={yoy >= 0 ? 'increase' : 'decrease'}
+              description="Variazione vs anno precedente"
+            />
+          );
+        })()}
+        {(() => {
+          const months = getMonthlySalesWithYOY(womenStoreSales, 12);
+          const last = months[months.length - 1];
+          const yoy = last && last.previous > 0 ? ((last.current - last.previous) / last.previous) * 100 : 0;
+          return (
+            <MetricCard
+              title="Negozio Donna"
+              value={allMetrics.salesByChannel.negozio_donna}
+              prefix="€"
+              change={Number(yoy.toFixed(1))}
+              changeType={yoy >= 0 ? 'increase' : 'decrease'}
+              badge="YoY"
+              badgeVariant="secondary"
+            />
+          );
+        })()}
+        {(() => {
+          const months = getMonthlySalesWithYOY(menStoreSales, 12);
+          const last = months[months.length - 1];
+          const yoy = last && last.previous > 0 ? ((last.current - last.previous) / last.previous) * 100 : 0;
+          return (
+            <MetricCard
+              title="Negozio Uomo"
+              value={allMetrics.salesByChannel.negozio_uomo}
+              prefix="€"
+              change={Number(yoy.toFixed(1))}
+              changeType={yoy >= 0 ? 'increase' : 'decrease'}
+            />
+          );
+        })()}
         <MetricCard
           title="Margine Medio"
           value={(womenMetrics.margin + menMetrics.margin) / 2}
@@ -127,10 +173,25 @@ export function StoresSection({ sales, returns, inventory, dateRange }: StoresSe
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <SalesChart
               title="Andamento Vendite - Negozio Donna"
-              data={womenSalesByDate}
-              type="line"
-              dataKey="sales"
-              xAxisKey="date"
+              data={womenMonthlyYOY}
+              type="line-dual"
+              dataKey="current"
+              xAxisKey="name"
+            />
+            <SalesChart
+              title="Vendite per Brand - Negozio Donna"
+              data={getBrandData(womenStoreSales, inventory).map(x => ({ name: x.name, value: x.value }))}
+              type="bar"
+              dataKey="value"
+            />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <SalesChart
+              title="Vendite per Stagione - Negozio Donna"
+              data={womenSeasonData}
+              type="bar"
+              dataKey="value"
+              xAxisKey="name"
             />
             <SalesChart
               title="Vendite per Categoria - Negozio Donna"
@@ -175,10 +236,25 @@ export function StoresSection({ sales, returns, inventory, dateRange }: StoresSe
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <SalesChart
               title="Andamento Vendite - Negozio Uomo"
-              data={menSalesByDate}
-              type="line"
-              dataKey="sales"
-              xAxisKey="date"
+              data={menMonthlyYOY}
+              type="line-dual"
+              dataKey="current"
+              xAxisKey="name"
+            />
+            <SalesChart
+              title="Vendite per Brand - Negozio Uomo"
+              data={getBrandData(menStoreSales, inventory).map(x => ({ name: x.name, value: x.value }))}
+              type="bar"
+              dataKey="value"
+            />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <SalesChart
+              title="Vendite per Stagione - Negozio Uomo"
+              data={menSeasonData}
+              type="bar"
+              dataKey="value"
+              xAxisKey="name"
             />
             <SalesChart
               title="Vendite per Categoria - Negozio Uomo"

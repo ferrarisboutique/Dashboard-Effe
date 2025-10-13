@@ -4,19 +4,16 @@ import { InventoryStats } from "./InventoryStats";
 import { Sale, Return } from "../types/dashboard";
 import { InventoryItem } from "../types/inventory";
 import { calculateMetrics, getSalesByDate, getBrandData, getCategoryData, filterDataByDateRange } from "../utils/analytics";
-import { TrendingUp, ShoppingBag, RotateCcw, Target, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
-import { Button } from "./ui/button";
+import { TrendingUp, ShoppingBag, Target } from "lucide-react";
 
 interface DashboardOverviewProps {
   sales: Sale[];
   returns: Return[];
   inventory: InventoryItem[];
   dateRange: string;
-  onNavigateToDiagnostics?: () => void;
 }
 
-export function DashboardOverview({ sales, returns, inventory, dateRange, onNavigateToDiagnostics }: DashboardOverviewProps) {
+export function DashboardOverview({ sales, returns, inventory, dateRange }: DashboardOverviewProps) {
   // Apply date filter to sales and returns
   const filteredSales = filterDataByDateRange(sales, dateRange);
   const filteredReturns = filterDataByDateRange(returns, dateRange);
@@ -30,11 +27,6 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, onNavi
   // Handle empty data state within sections
   const hasData = filteredSales.length > 0;
   const hasInventoryOnly = inventory.length > 0 && filteredSales.length === 0;
-  
-  // Check for problematic channels
-  const validChannels = ['negozio_donna', 'negozio_uomo', 'ecommerce', 'marketplace'];
-  const problematicSales = sales.filter(s => !validChannels.includes(s.channel));
-  const hasProblematicChannels = problematicSales.length > 0 && sales.length > 0;
 
   return (
     <div className="space-y-6">
@@ -44,29 +36,6 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, onNavi
           Panoramica Generale
         </h2>
       </div>
-
-      {/* Warning for problematic channels - solo se ci sono dati */}
-      {hasProblematicChannels && sales.length > 0 && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Attenzione: Dati Incompleti</AlertTitle>
-          <AlertDescription className="flex items-center justify-between">
-            <span>
-              Trovate {problematicSales.length} vendite senza canale valido. Questi dati non vengono visualizzati correttamente nella dashboard.
-            </span>
-            {onNavigateToDiagnostics && (
-              <Button 
-                onClick={onNavigateToDiagnostics} 
-                variant="outline" 
-                size="sm"
-                className="ml-4 flex-shrink-0"
-              >
-                Correggi Ora
-              </Button>
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

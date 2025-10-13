@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 interface SalesChartProps {
   title: string;
   data: any[];
-  type: 'bar' | 'line' | 'pie';
+  type: 'bar' | 'line' | 'pie' | 'line-dual';
   dataKey: string;
   xAxisKey?: string;
   height?: number;
@@ -42,6 +42,22 @@ export function SalesChart({ title, data, type, dataKey, xAxisKey = 'name', heig
                 labelFormatter={(label) => `${label}`}
               />
               <Line type="monotone" dataKey={dataKey} stroke="#8884d8" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        );
+      case 'line-dual':
+        return (
+          <ResponsiveContainer width="100%" height={height}>
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={xAxisKey} />
+              <YAxis />
+              <Tooltip 
+                formatter={(value: number, name: string) => [`€${value.toLocaleString('it-IT')}`, name === 'current' ? 'Anno Corrente' : 'Anno Prec.']} 
+                labelFormatter={(label) => `${label}`} 
+              />
+              <Line type="monotone" dataKey="current" stroke="#2563eb" strokeWidth={2} name="Anno Corrente" />
+              <Line type="monotone" dataKey="previous" stroke="#94a3b8" strokeWidth={2} name="Anno Prec." />
             </LineChart>
           </ResponsiveContainer>
         );

@@ -1,183 +1,123 @@
-# Supabase CLI
+# Fashion Performance Dashboard
 
-[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
-](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
+Dashboard moderna e performante per il monitoraggio delle vendite e dell'inventario di negozi di moda.
 
-[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
+## 🚀 Features
 
-This repository contains all the functionality for Supabase CLI.
+- **Gestione Vendite**: Monitora le vendite in tempo reale da tutti i canali (Negozio Donna, Negozio Uomo, E-commerce, Marketplace)
+- **Inventario Dinamico**: Gestisci migliaia di prodotti con ricerca e filtri avanzati
+- **Analytics Avanzate**: Visualizza trend, performance per brand e categorie
+- **Upload Excel**: Importa dati di vendita e inventario direttamente da file Excel/CSV
+- **Dashboard Responsive**: Interfaccia moderna costruita con React e Tailwind CSS
 
-- [x] Running Supabase locally
-- [x] Managing database migrations
-- [x] Creating and deploying Supabase Functions
-- [x] Generating types directly from your database schema
-- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
+## 📋 Prerequisiti
 
-## Getting started
+- Node.js 18+ 
+- npm o yarn
+- Account Supabase (per database e edge functions)
 
-### Install the CLI
-
-Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
-
-```bash
-npm i supabase --save-dev
-```
-
-To install the beta release channel:
+## 🛠️ Installazione
 
 ```bash
-npm i supabase@beta --save-dev
+# Clone il repository
+git clone [your-repo-url]
+cd Dashboard-Effe
+
+# Installa le dipendenze
+npm install
+
+# Avvia il server di sviluppo
+npm run dev
 ```
 
-When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
+L'app sarà disponibile su `http://localhost:5173`
 
-```
-NODE_OPTIONS=--no-experimental-fetch yarn add supabase
-```
-
-> **Note**
-For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
-
-<details>
-  <summary><b>macOS</b></summary>
-
-  Available via [Homebrew](https://brew.sh). To install:
-
-  ```sh
-  brew install supabase/tap/supabase
-  ```
-
-  To install the beta release channel:
-  
-  ```sh
-  brew install supabase/tap/supabase-beta
-  brew link --overwrite supabase-beta
-  ```
-  
-  To upgrade:
-
-  ```sh
-  brew upgrade supabase
-  ```
-</details>
-
-<details>
-  <summary><b>Windows</b></summary>
-
-  Available via [Scoop](https://scoop.sh). To install:
-
-  ```powershell
-  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-  scoop install supabase
-  ```
-
-  To upgrade:
-
-  ```powershell
-  scoop update supabase
-  ```
-</details>
-
-<details>
-  <summary><b>Linux</b></summary>
-
-  Available via [Homebrew](https://brew.sh) and Linux packages.
-
-  #### via Homebrew
-
-  To install:
-
-  ```sh
-  brew install supabase/tap/supabase
-  ```
-
-  To upgrade:
-
-  ```sh
-  brew upgrade supabase
-  ```
-
-  #### via Linux packages
-
-  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
-
-  ```sh
-  sudo apk add --allow-untrusted <...>.apk
-  ```
-
-  ```sh
-  sudo dpkg -i <...>.deb
-  ```
-
-  ```sh
-  sudo rpm -i <...>.rpm
-  ```
-
-  ```sh
-  sudo pacman -U <...>.pkg.tar.zst
-  ```
-</details>
-
-<details>
-  <summary><b>Other Platforms</b></summary>
-
-  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
-
-  ```sh
-  go install github.com/supabase/cli@latest
-  ```
-
-  Add a symlink to the binary in `$PATH` for easier access:
-
-  ```sh
-  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
-  ```
-
-  This works on other non-standard Linux distros.
-</details>
-
-<details>
-  <summary><b>Community Maintained Packages</b></summary>
-
-  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
-  To install in your working directory:
-
-  ```bash
-  pkgx install supabase
-  ```
-
-  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
-</details>
-
-### Run the CLI
+## 📦 Build per Produzione
 
 ```bash
-supabase bootstrap
+npm run build
 ```
 
-Or using npx:
+I file di produzione saranno generati nella cartella `build/`.
 
-```bash
-npx supabase bootstrap
+## 🗂️ Struttura del Progetto
+
+```
+Dashboard-Effe/
+├── src/
+│   ├── components/       # Componenti React
+│   │   ├── ui/          # Componenti UI riutilizzabili
+│   │   └── ...          # Altri componenti
+│   ├── hooks/           # Custom React hooks
+│   ├── types/           # TypeScript types
+│   ├── utils/           # Utility functions
+│   ├── supabase/        # Supabase edge functions
+│   └── styles/          # Stili globali
+├── build/               # File di produzione (generato)
+└── package.json
 ```
 
-The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
+## 💡 Utilizzo
 
-## Docs
+### Caricamento Dati di Vendita
 
-Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
+1. Vai alla sezione "Carica Vendite"
+2. Carica un file Excel/CSV con le seguenti colonne:
+   - Data
+   - User (venditore)
+   - SKU
+   - Quantità
+   - Prezzo
+   - Canale (verrà mappato automaticamente)
 
-## Breaking changes
+### Caricamento Inventario
 
-We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
+1. Vai alla sezione "Carica Inventario"
+2. Carica un file Excel/CSV con le seguenti colonne:
+   - SKU
+   - Brand
+   - Categoria (opzionale)
+   - Prezzo d'acquisto
+   - Prezzo di vendita
+   - Collezione (opzionale)
 
-However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
+## 🔧 Tecnologie Utilizzate
 
-## Developing
+- **React 18** - Framework UI
+- **TypeScript** - Type safety
+- **Vite** - Build tool
+- **Tailwind CSS** - Styling
+- **Shadcn/ui** - Componenti UI
+- **Recharts** - Grafici e visualizzazioni
+- **Supabase** - Database e Edge Functions
+- **Lucide React** - Icone
 
-To run from source:
+## 📊 Database
 
-```sh
-# Go >= 1.22
-go run . help
-```
+Il database è gestito tramite Supabase Edge Functions con supporto per:
+- Gestione vendite con protezione duplicati
+- Inventario illimitato (oltre 1000 righe)
+- Paginazione e filtri lato server
+- Chunked uploads per file grandi
+
+## 🎨 Customizzazione
+
+L'app utilizza Tailwind CSS per lo styling. Puoi personalizzare i colori e i temi modificando:
+- `src/styles/globals.css` - Variabili CSS globali
+- `tailwind.config.js` - Configurazione Tailwind (se presente)
+
+## 🤝 Contributi
+
+Contributi, issues e feature requests sono benvenuti!
+
+## 📝 Licenza
+
+Questo progetto è sotto licenza MIT - vedi il file [LICENSE](LICENSE) per i dettagli.
+
+## 📧 Contatti
+
+Per domande o supporto, contatta il team di sviluppo.
+
+---
+
+Made with ❤️ for Fashion Retail

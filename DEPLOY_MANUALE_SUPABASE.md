@@ -1,3 +1,25 @@
+# 🚀 Deploy Manuale Edge Functions - 3 Minuti
+
+## Metodo Rapido: Supabase Dashboard
+
+### Step 1: Accedi alla Dashboard
+Vai su: https://supabase.com/dashboard/project/sbtkymupbjyikfwjeumk/functions
+
+### Step 2: Trova la Function
+Cerca `make-server-49468be0` nella lista delle Edge Functions
+
+### Step 3: Modifica il File sales.tsx
+
+1. Clicca sulla function `make-server-49468be0`
+2. Trova il file **`sales.tsx`** nella lista dei file
+3. Clicca su "Edit"
+4. **Sostituisci tutto il contenuto** con il codice qui sotto:
+
+---
+
+## 📄 CODICE AGGIORNATO sales.tsx
+
+```typescript
 import { Hono } from 'npm:hono';
 import { cors } from 'npm:hono/cors';
 import * as kv from './kv_store.tsx';
@@ -171,3 +193,53 @@ app.delete('/sales/:id', async (c) => {
 });
 
 export default app;
+```
+
+---
+
+### Step 4: Salva e Deploy
+
+1. Clicca su **"Save"** in alto a destra
+2. Clicca su **"Deploy"**
+3. Attendi che appaia il messaggio "Deployed successfully" (circa 10-20 secondi)
+
+### Step 5: Verifica
+
+Testa che funzioni:
+```bash
+curl https://sbtkymupbjyikfwjeumk.supabase.co/functions/v1/make-server-49468be0/sales \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNidGt5bXVwYmp5aWtmd2pldW1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MDA0MTUsImV4cCI6MjA3NDQ3NjQxNX0.ONl5r0x89QJKQtP9jttBkvESpV6lDpc1ijydxtP7nzo"
+```
+
+Dovresti vedere: `{"success":true,"data":[]}`
+
+---
+
+## 🎯 Dopo il Deploy
+
+1. Vai su https://dashboard-effe-2x1yccu6l-paolos-projects-18e1f9ba.vercel.app
+2. Vai su **"Carica Vendite"**
+3. Carica il tuo file Excel/CSV
+4. Verifica che i dati ora appaiano in **"Panoramica"** e **"Negozi"**!
+
+---
+
+## ✨ Cosa Cambia
+
+Il nuovo codice salva **TUTTI i campi** per ogni vendita:
+- ✅ `sku` e `productId` - Codice prodotto
+- ✅ `user` - Nome venditore
+- ✅ `price` - Prezzo unitario
+- ✅ `amount` - Importo totale
+- ✅ `channel` - Canale vendita
+- ✅ `date` - Data vendita
+- ✅ `quantity` - Quantità
+- ✅ Plus: brand, category, season
+
+Questo permette alla dashboard di visualizzare correttamente tutti i grafici e le statistiche!
+
+---
+
+**Tempo totale: 3 minuti** ⏱️
+
+
