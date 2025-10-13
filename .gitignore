@@ -38,6 +38,5 @@ build
 
 # Temporary scripts and tools
 delete-all-sales.js
-supabase
 supabase.tar.gz
 pulisci-database.html
