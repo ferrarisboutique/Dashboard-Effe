@@ -20,7 +20,6 @@ export function initSentry() {
         },
       });
       sentryInitialized = true;
-      console.log('Sentry initialized');
     });
   } catch (error) {
     console.warn('Failed to initialize Sentry:', error);

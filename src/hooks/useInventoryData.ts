@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { InventoryItem, ProcessedInventoryData } from '../types/inventory';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { API_BASE_URL, publicAnonKey } from '../utils/supabase/info';
 
 interface PaginationInfo {
   page: number;
@@ -24,7 +24,7 @@ const testServerConnection = async (): Promise<boolean> => {
     }, 8000);
     
     const response = await fetch(
-      `https://${projectId}.supabase.co/functions/v1/make-server-49468be0/health`,
+      `${API_BASE_URL}/health`,
       {
         method: 'GET',
         headers: {
@@ -86,7 +86,7 @@ export function useInventoryData(autoLoad: boolean = true) {
       }, 25000);
       
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-49468be0/inventory?${searchParams}`,
+        `${API_BASE_URL}/inventory?${searchParams}`,
         {
           method: 'GET',
           headers: {
@@ -164,7 +164,7 @@ export function useInventoryData(autoLoad: boolean = true) {
             }, 25000);
             
             const response = await fetch(
-              `https://${projectId}.supabase.co/functions/v1/make-server-49468be0/inventory`,
+              `${API_BASE_URL}/inventory`,
               {
                 method: 'POST',
                 headers: {
@@ -191,10 +191,11 @@ export function useInventoryData(autoLoad: boolean = true) {
             success = true;
             
           } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
             retryCount++;
-            
+
             if (retryCount > maxRetries) {
-              throw new Error(`Chunk ${chunkNumber} failed dopo ${maxRetries} tentativi: ${error.message}`);
+              throw new Error(`Chunk ${chunkNumber} failed dopo ${maxRetries} tentativi: ${errorMessage}`);
             }
           }
         }
@@ -242,7 +243,7 @@ export function useInventoryData(autoLoad: boolean = true) {
       }, 25000);
       
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-49468be0/inventory`,
+        `${API_BASE_URL}/inventory`,
         {
           method: 'DELETE',
           headers: {
@@ -294,7 +295,7 @@ export function useInventoryData(autoLoad: boolean = true) {
       }, 20000);
       
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-49468be0/inventory/count`,
+        `${API_BASE_URL}/inventory/count`,
         {
           method: 'GET',
           headers: {

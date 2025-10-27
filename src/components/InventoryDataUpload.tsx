@@ -65,11 +65,6 @@ export function InventoryDataUpload({ onDataUploaded, onClearInventory }: Invent
 
       if (uploadResult.success && uploadResult.data) {
         const dataSize = uploadResult.data.length;
-        console.log(`File processed successfully. ${dataSize} items ready for upload.`);
-        
-        if (dataSize > 10000) {
-          console.log(`Large file detected (${dataSize} items). Will upload in chunks.`);
-        }
 
         // Step 2: Upload to server with progress tracking
         const serverResult = await onDataUploaded(uploadResult.data, (progress) => {

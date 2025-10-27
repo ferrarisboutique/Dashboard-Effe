@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import { captureError } from "./utils/sentry";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
@@ -84,7 +85,9 @@ export default function App() {
         setActiveSection('overview');
       }
     } catch (error) {
-      console.error('Error uploading sales data:', error);
+      if (error instanceof Error) {
+        captureError(error, { context: 'handleSalesUploaded' });
+      }
       toast.error('Errore nel caricamento dei dati di vendita');
     }
   };
@@ -105,7 +108,9 @@ export default function App() {
         throw new Error('Upload failed');
       }
     } catch (error) {
-      console.error('Error uploading inventory:', error);
+      if (error instanceof Error) {
+        captureError(error, { context: 'handleInventoryUploaded' });
+      }
       toast.error('Errore nel caricamento dell\'inventario');
       return { success: false, message: 'Errore nell\'upload' };
     }
@@ -116,7 +121,9 @@ export default function App() {
       await Promise.all([refreshSales(), refreshInventory()]);
       toast.success('Dati aggiornati!');
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      if (error instanceof Error) {
+        captureError(error, { context: 'handleRefreshData' });
+      }
       toast.error('Errore nell\'aggiornamento dati');
     }
   };

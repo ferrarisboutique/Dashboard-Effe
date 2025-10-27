@@ -191,12 +191,13 @@ inventory.get('/inventory', async (c) => {
       }
     });
   } catch (error) {
+    const errorDetails = error instanceof Error ? error.message : String(error);
     return c.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Failed to fetch inventory',
-        details: error.message 
-      }, 
+        details: errorDetails
+      },
       500
     );
   }

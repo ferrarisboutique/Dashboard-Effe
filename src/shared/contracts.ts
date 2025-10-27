@@ -15,6 +15,7 @@ export const SaleSchema = z.object({
   category: z.string(),
   season: z.string(),
   marketplace: z.string().optional(),
+  purchasePrice: z.number().optional(),
 });
 
 export const ProcessedSaleDataSchema = z.object({

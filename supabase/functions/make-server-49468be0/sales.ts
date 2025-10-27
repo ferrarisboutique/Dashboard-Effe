@@ -269,7 +269,8 @@ app.post('/sales/bulk', async (c) => {
       mappingsApplied
     });
   } catch (error) {
-    return c.json({ success: false, error: error.message }, 500);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return c.json({ success: false, error: errorMessage }, 500);
   }
 });
 
@@ -318,7 +319,8 @@ app.post('/sales', async (c) => {
     
     return c.json({ success: true, data: sale });
   } catch (error) {
-    return c.json({ success: false, error: error.message }, 500);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return c.json({ success: false, error: errorMessage }, 500);
   }
 });
 
@@ -330,7 +332,8 @@ app.delete('/sales/:id', async (c) => {
     
     return c.json({ success: true, message: 'Sale deleted' });
   } catch (error) {
-    return c.json({ success: false, error: error.message }, 500);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return c.json({ success: false, error: errorMessage }, 500);
   }
 });
 

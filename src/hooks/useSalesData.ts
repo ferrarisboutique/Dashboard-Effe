@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sale } from '../types/dashboard';
 import { ProcessedSaleData } from '../types/upload';
-import { projectId, publicAnonKey } from '../utils/supabase/info';
+import { API_BASE_URL, publicAnonKey } from '../utils/supabase/info';
 import { toast } from 'sonner';
-
-const API_BASE_URL = `https://${projectId}.supabase.co/functions/v1/make-server-49468be0`;
 
 export interface UseSalesDataReturn {
   sales: Sale[];
@@ -157,7 +155,7 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
           }
         } catch (chunkError) {
           clearTimeout(timeoutId);
-          if (chunkError.name === 'AbortError') {
+          if (chunkError instanceof Error && chunkError.name === 'AbortError') {
             throw new Error(`Timeout durante l'upload del blocco ${chunkIndex + 1}/${totalChunks}. Il file è troppo grande o la connessione è lenta.`);
           }
           throw chunkError;
