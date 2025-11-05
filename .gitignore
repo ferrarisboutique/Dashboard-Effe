@@ -40,3 +40,23 @@ build
 delete-all-sales.js
 supabase.tar.gz
 pulisci-database.html
+.env*.local
+*.sh
+!deploy-edge-functions.sh
+.npm-cache/
+*.log
+.DS_Store
+
+# Build artifacts
+build/
+dist/
+.vite/
+node_modules/.vite/
+
+# Temporary HTML files
+debug-database.html
+test-upload.html
+pulisci-database.html
+
+# Old deploy packages
+deploy-package/

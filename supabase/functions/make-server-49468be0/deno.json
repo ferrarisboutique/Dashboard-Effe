@@ -1,12 +1,15 @@
 {
   "imports": {
-    "hono": "npm:hono@^4.0.0",
-    "hono/": "npm:hono@^4.0.0/",
+    "hono": "npm:hono@^4.6.5",
+    "hono/": "npm:hono@^4.6.5/",
     "@supabase/supabase-js": "jsr:@supabase/supabase-js@2.49.8"
   },
   "compilerOptions": {
     "lib": ["deno.window", "deno.unstable"],
     "jsx": "react-jsx",
     "jsxImportSource": "react"
+  },
+  "tasks": {
+    "serve": "deno run -A --unstable ./index.ts"
   }
 }

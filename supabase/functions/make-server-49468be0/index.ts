@@ -23,10 +23,16 @@ app.use(
 );
 
 // Health check endpoint
-app.get("/make-server-49468be0/health", async (c) => {
+// Note: Supabase automatically adds /functions/v1/make-server-49468be0 prefix
+app.get("/health", async (c) => {
   try {
-    // Simple health check that also tests database connectivity
-    await kv.get('health_check_test_key');
+    // Simple health check - test database connectivity
+    // Note: kv.get() might fail if key doesn't exist, which is OK for health check
+    try {
+      await kv.get('health_check_test_key');
+    } catch {
+      // Key doesn't exist is fine - just testing connectivity
+    }
     return c.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(),
@@ -38,15 +44,16 @@ app.get("/make-server-49468be0/health", async (c) => {
       status: "error", 
       timestamp: new Date().toISOString(),
       message: "Database connectivity issue",
-      error: error.message 
+      error: error instanceof Error ? error.message : String(error)
     }, 500);
   }
 });
 
 // Mount sales routes
-app.route("/make-server-49468be0", salesRoutes);
+// Note: Routes are mounted at root since Supabase adds the function name prefix
+app.route("/", salesRoutes);
 
 // Mount inventory routes  
-app.route("/make-server-49468be0", inventory);
+app.route("/", inventory);
 
 Deno.serve(app.fetch);

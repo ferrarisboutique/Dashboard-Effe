@@ -123,15 +123,17 @@ inventory.get('/inventory', async (c) => {
       
       const item = allInventoryItems[i];
       const v = item.value || {};
-      const safe = {
+      const inventoryItem = {
+        id: (v.id || item.key?.replace(/^inventory_/, '') || '').toString(),
         sku: (v.sku || '').toString(),
         brand: (v.brand || '').toString(),
         category: (v.category || '').toString(),
         collection: (v.collection || '').toString(),
         purchasePrice: typeof v.purchasePrice === 'number' ? v.purchasePrice : Number(v.purchasePrice || 0),
         sellPrice: typeof v.sellPrice === 'number' ? v.sellPrice : Number(v.sellPrice || 0),
+        createdAt: v.createdAt,
+        updatedAt: v.updatedAt,
       };
-      const inventoryItem = { ...safe, key: item.key };
       
       uniqueBrands.add(inventoryItem.brand);
       if (inventoryItem.category && inventoryItem.category.trim()) {

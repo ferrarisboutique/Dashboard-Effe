@@ -178,7 +178,6 @@ supabase functions deploy make-server-49468be0
 # Rollback Edge Function (con Supabase CLI)
 supabase functions delete make-server-49468be0 --version <version>
 ```
-
 ## 8. Best Practices
 
 1. **Environment Variables**: Mai committare file `.env` con credenziali reali
@@ -193,3 +192,4 @@ Per problemi o domande:
 - Vercel: https://vercel.com/docs
 - Supabase: https://supabase.com/docs
 - Repository Issues: [Link al tuo repository]
+

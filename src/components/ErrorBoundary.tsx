@@ -57,7 +57,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 Riprova
               </Button>
             </div>
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <details className="text-xs bg-muted p-2 rounded">
                 <summary>Dettagli errore (dev)</summary>
                 <pre className="mt-2 whitespace-pre-wrap">
