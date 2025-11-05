@@ -162,7 +162,11 @@ app.post('/sales/bulk', async (c) => {
     }
 
     // Get existing sales to check for duplicates (all pages)
-    const existingSalesData = await getAllSalesItems();
+    // ALSO load inventory map to match SKUs to brands during save
+    const [existingSalesData, invMap] = await Promise.all([
+      getAllSalesItems(),
+      getInventoryMap()
+    ]);
     
     // Load learned mappings for auto-correction
     const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
@@ -182,6 +186,7 @@ app.post('/sales/bulk', async (c) => {
     let skippedDuplicates = 0;
     let processedCount = 0;
     let mappingsApplied = 0;
+    let brandsFromInventory = 0;
     
     for (let index = 0; index < sales.length; index++) {
       const sale = sales[index];
@@ -198,11 +203,21 @@ app.post('/sales/bulk', async (c) => {
       
       existingSalesSignatures.add(saleSignature);
       
-      // Auto-apply learned mappings
+      // Auto-apply learned mappings and inventory lookup
       let brand = sale.brand || 'Unknown';
       let channel = sale.channel;
       
-      // Check brand mapping if brand is Unknown
+      // Priority 1: Check inventory map if brand is Unknown or missing
+      if ((brand === 'Unknown' || !brand) && sku) {
+        const normSku = normalizeSku(sku);
+        const invItem = invMap[normSku];
+        if (invItem && invItem.brand) {
+          brand = invItem.brand;
+          brandsFromInventory++;
+        }
+      }
+      
+      // Priority 2: Check learned brand mapping if still Unknown
       if (brand === 'Unknown' && sku) {
         try {
           const brandMapping = await kv.get(`mapping_brand_${normalizeSku(sku)}`);
@@ -257,6 +272,9 @@ app.post('/sales/bulk', async (c) => {
     if (skippedDuplicates > 0) {
       message += ` (${skippedDuplicates} vendite duplicate ignorate)`;
     }
+    if (brandsFromInventory > 0) {
+      message += ` (${brandsFromInventory} brand attribuiti dall'inventario)`;
+    }
     if (mappingsApplied > 0) {
       message += ` (${mappingsApplied} mapping auto-applicati)`;
     }
@@ -266,6 +284,7 @@ app.post('/sales/bulk', async (c) => {
       message,
       savedCount: processedCount,
       skippedDuplicates,
+      brandsFromInventory,
       mappingsApplied
     });
   } catch (error) {
@@ -309,10 +328,39 @@ app.post('/sales', async (c) => {
   try {
     const saleData = await c.req.json();
     
+    // Load inventory map to match SKU to brand
+    const invMap = await getInventoryMap();
+    const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
+    
+    let brand = saleData.brand || 'Unknown';
+    const sku = saleData.sku || saleData.productId;
+    
+    // Priority 1: Check inventory map if brand is Unknown or missing
+    if ((brand === 'Unknown' || !brand) && sku) {
+      const normSku = normalizeSku(sku);
+      const invItem = invMap[normSku];
+      if (invItem && invItem.brand) {
+        brand = invItem.brand;
+      }
+    }
+    
+    // Priority 2: Check learned brand mapping if still Unknown
+    if (brand === 'Unknown' && sku) {
+      try {
+        const brandMapping = await kv.get(`mapping_brand_${normalizeSku(sku)}`);
+        if (brandMapping && brandMapping.brand) {
+          brand = brandMapping.brand;
+        }
+      } catch (e) {
+        // Mapping not found, continue with Unknown
+      }
+    }
+    
     const saleId = `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const sale: SaleData = {
       ...saleData,
-      id: saleId
+      id: saleId,
+      brand: brand
     };
     
     await kv.set(saleId, sale);
@@ -331,6 +379,55 @@ app.delete('/sales/:id', async (c) => {
     await kv.del(saleId);
     
     return c.json({ success: true, message: 'Sale deleted' });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return c.json({ success: false, error: errorMessage }, 500);
+  }
+});
+
+// Update existing sales with brands from inventory
+// This fixes sales that were uploaded before the inventory lookup was implemented
+app.post('/sales/update-brands-from-inventory', async (c) => {
+  try {
+    const [kvItems, invMap] = await Promise.all([
+      getAllSalesItems(),
+      getInventoryMap()
+    ]);
+    
+    const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
+    const updates: Record<string, SaleData> = {};
+    let updatedCount = 0;
+    
+    for (const item of kvItems) {
+      const value = item.value || {};
+      const currentBrand = value.brand;
+      
+      // Only update if brand is Unknown or missing
+      if ((!currentBrand || currentBrand === 'Unknown') && value.sku) {
+        const normSku = normalizeSku(value.sku || value.productId);
+        const invItem = invMap[normSku];
+        
+        if (invItem && invItem.brand) {
+          // Update the sale with brand from inventory
+          updates[item.key] = {
+            ...value,
+            brand: invItem.brand
+          };
+          updatedCount++;
+        }
+      }
+    }
+    
+    // Apply updates in batch
+    if (Object.keys(updates).length > 0) {
+      await kv.mset(updates);
+    }
+    
+    return c.json({
+      success: true,
+      message: `${updatedCount} vendite aggiornate con brand dall'inventario`,
+      updatedCount
+    });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return c.json({ success: false, error: errorMessage }, 500);
