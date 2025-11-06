@@ -46,6 +46,8 @@ export function SalesChart({ title, data, type, dataKey, xAxisKey = 'name', heig
           </ResponsiveContainer>
         );
       case 'line-dual':
+        const currentYear = new Date().getFullYear();
+        const previousYear = currentYear - 1;
         return (
           <ResponsiveContainer width="100%" height={height}>
             <LineChart data={data}>
@@ -53,11 +55,29 @@ export function SalesChart({ title, data, type, dataKey, xAxisKey = 'name', heig
               <XAxis dataKey={xAxisKey} />
               <YAxis />
               <Tooltip 
-                formatter={(value: number, name: string) => [`€${value.toLocaleString('it-IT')}`, name === 'current' ? 'Anno Corrente' : 'Anno Prec.']} 
+                formatter={(value: number, name: string) => {
+                  const yearLabel = name === 'current' ? `${currentYear}` : `${previousYear}`;
+                  return [`€${value.toLocaleString('it-IT')}`, `Anno ${yearLabel}`];
+                }}
                 labelFormatter={(label) => `${label}`} 
               />
-              <Line type="monotone" dataKey="current" stroke="#2563eb" strokeWidth={2} name="Anno Corrente" />
-              <Line type="monotone" dataKey="previous" stroke="#94a3b8" strokeWidth={2} name="Anno Prec." />
+              <Line 
+                type="monotone" 
+                dataKey="current" 
+                stroke="#2563eb" 
+                strokeWidth={2} 
+                name={`Anno Corrente ${currentYear}`}
+                dot={{ r: 4 }}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="previous" 
+                stroke="#94a3b8" 
+                strokeWidth={2} 
+                strokeDasharray="5 5"
+                name={`Anno Precedente ${previousYear}`}
+                dot={{ r: 4 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         );

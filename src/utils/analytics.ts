@@ -7,30 +7,55 @@ export function filterDataByDateRange<T extends { date: string }>(data: T[], dat
   
   const now = new Date();
   const cutoffDate = new Date();
+  const startDate = new Date();
+  const endDate = new Date();
   
   switch (dateRange) {
     case '7d':
       cutoffDate.setDate(now.getDate() - 7);
-      break;
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= cutoffDate;
+      });
     case '30d':
       cutoffDate.setDate(now.getDate() - 30);
-      break;
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= cutoffDate;
+      });
     case '90d':
       cutoffDate.setDate(now.getDate() - 90);
-      break;
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= cutoffDate;
+      });
     case '1y':
       cutoffDate.setFullYear(now.getFullYear() - 1);
-      break;
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= cutoffDate;
+      });
+    case 'current_year':
+      startDate.setFullYear(now.getFullYear(), 0, 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setFullYear(now.getFullYear(), 11, 31);
+      endDate.setHours(23, 59, 59, 999);
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= startDate && itemDate <= endDate;
+      });
+    case 'previous_year':
+      startDate.setFullYear(now.getFullYear() - 1, 0, 1);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setFullYear(now.getFullYear() - 1, 11, 31);
+      endDate.setHours(23, 59, 59, 999);
+      return data.filter(item => {
+        const itemDate = new Date(item.date);
+        return itemDate >= startDate && itemDate <= endDate;
+      });
     default:
       return data;
   }
-  
-  const filtered = data.filter(item => {
-    const itemDate = new Date(item.date);
-    return itemDate >= cutoffDate;
-  });
-  
-  return filtered;
 }
 
 // Advanced filter supporting custom start/end
@@ -235,4 +260,185 @@ export function getSeasonData(sales: Sale[]) {
   return Object.entries(grouped)
     .map(([name, value]) => ({ name, value }))
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Calculate YoY change for a metric value
+export function calculateYoYChange(
+  sales: Sale[],
+  dateRange: string,
+  customStart?: string,
+  customEnd?: string,
+  metricFn?: (sales: Sale[]) => number
+): { change: number; changeType: 'increase' | 'decrease' | 'neutral' } {
+  if (!metricFn) {
+    // Default: calculate total sales
+    metricFn = (s: Sale[]) => s.reduce((sum, sale) => sum + sale.amount, 0);
+  }
+
+  let currentStart: Date;
+  let currentEnd: Date;
+  let previousStart: Date;
+  let previousEnd: Date;
+
+  const now = new Date();
+
+  if (dateRange === 'custom' && customStart && customEnd) {
+    currentStart = new Date(customStart);
+    currentEnd = new Date(customEnd);
+    previousStart = new Date(currentStart);
+    previousEnd = new Date(currentEnd);
+    previousStart.setFullYear(previousStart.getFullYear() - 1);
+    previousEnd.setFullYear(previousEnd.getFullYear() - 1);
+  } else {
+    switch (dateRange) {
+      case '7d':
+        currentEnd = new Date(now);
+        currentStart = new Date(now);
+        currentStart.setDate(currentStart.getDate() - 7);
+        previousEnd = new Date(currentStart);
+        previousStart = new Date(currentStart);
+        previousStart.setDate(previousStart.getDate() - 7);
+        break;
+      case '30d':
+        currentEnd = new Date(now);
+        currentStart = new Date(now);
+        currentStart.setDate(currentStart.getDate() - 30);
+        previousEnd = new Date(currentStart);
+        previousStart = new Date(currentStart);
+        previousStart.setDate(previousStart.getDate() - 30);
+        break;
+      case '90d':
+        currentEnd = new Date(now);
+        currentStart = new Date(now);
+        currentStart.setDate(currentStart.getDate() - 90);
+        previousEnd = new Date(currentStart);
+        previousStart = new Date(currentStart);
+        previousStart.setDate(previousStart.getDate() - 90);
+        break;
+      case '1y':
+        currentEnd = new Date(now);
+        currentStart = new Date(now);
+        currentStart.setFullYear(currentStart.getFullYear() - 1);
+        previousEnd = new Date(currentStart);
+        previousStart = new Date(currentStart);
+        previousStart.setFullYear(previousStart.getFullYear() - 1);
+        break;
+      case 'current_year':
+        currentStart = new Date(now.getFullYear(), 0, 1);
+        currentEnd = new Date(now);
+        previousStart = new Date(now.getFullYear() - 1, 0, 1);
+        previousEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
+        break;
+      case 'previous_year':
+        // For previous year, compare with year before that
+        currentStart = new Date(now.getFullYear() - 1, 0, 1);
+        currentEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
+        previousStart = new Date(now.getFullYear() - 2, 0, 1);
+        previousEnd = new Date(now.getFullYear() - 2, 11, 31, 23, 59, 59);
+        break;
+      default:
+        // For 'all', compare last 12 months vs previous 12 months
+        currentEnd = new Date(now);
+        currentStart = new Date(now);
+        currentStart.setMonth(currentStart.getMonth() - 12);
+        previousEnd = new Date(currentStart);
+        previousStart = new Date(currentStart);
+        previousStart.setMonth(previousStart.getMonth() - 12);
+    }
+  }
+
+  const currentSales = sales.filter(sale => {
+    const d = new Date(sale.date);
+    return d >= currentStart && d <= currentEnd;
+  });
+
+  const previousSales = sales.filter(sale => {
+    const d = new Date(sale.date);
+    return d >= previousStart && d <= previousEnd;
+  });
+
+  const currentValue = metricFn(currentSales);
+  const previousValue = metricFn(previousSales);
+
+  const change = previousValue > 0 
+    ? ((currentValue - previousValue) / previousValue) * 100 
+    : (currentValue > 0 ? 100 : 0);
+
+  return {
+    change: Number(change.toFixed(1)),
+    changeType: change > 0 ? 'increase' : change < 0 ? 'decrease' : 'neutral'
+  };
+}
+
+// Get brand channel distribution
+export function getBrandChannelDistribution(
+  sales: Sale[],
+  brand: string,
+  paymentMappings?: Record<string, { macroArea: string; channel: string }>
+): {
+  macroAreas: Array<{ name: string; value: number; percentage: number }>;
+  subChannels: Array<{ name: string; value: number; percentage: number; macroArea: string }>;
+} {
+  const brandSales = sales.filter(s => s.brand === brand);
+  const total = brandSales.reduce((sum, s) => sum + s.amount, 0);
+
+  // Group by macro area
+  const macroAreaMap: Record<string, number> = {
+    'Sito': 0,
+    'Negozio': 0,
+    'Marketplace': 0,
+    'Altro': 0
+  };
+
+  const subChannelMap: Record<string, { value: number; macroArea: string }> = {};
+
+  brandSales.forEach(sale => {
+    let macroArea = 'Altro';
+    let subChannel = '';
+
+    if (sale.channel === 'ecommerce') {
+      macroArea = 'Sito';
+      subChannel = 'Sito';
+    } else if (sale.channel === 'negozio_donna' || sale.channel === 'negozio_uomo') {
+      macroArea = 'Negozio';
+      subChannel = sale.channel === 'negozio_donna' ? 'Negozio Donna' : 'Negozio Uomo';
+    } else if (sale.channel === 'marketplace') {
+      macroArea = 'Marketplace';
+      // Use paymentMethod if available and mapped, otherwise use marketplace field
+      if (sale.paymentMethod && paymentMappings?.[sale.paymentMethod]) {
+        subChannel = sale.paymentMethod;
+      } else if (sale.marketplace) {
+        subChannel = sale.marketplace;
+      } else {
+        subChannel = 'Marketplace';
+      }
+    }
+
+    macroAreaMap[macroArea] = (macroAreaMap[macroArea] || 0) + sale.amount;
+
+    if (!subChannelMap[subChannel]) {
+      subChannelMap[subChannel] = { value: 0, macroArea };
+    }
+    subChannelMap[subChannel].value += sale.amount;
+  });
+
+  const macroAreas = Object.entries(macroAreaMap)
+    .filter(([_, value]) => value > 0)
+    .map(([name, value]) => ({
+      name,
+      value,
+      percentage: total > 0 ? (value / total) * 100 : 0
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const subChannels = Object.entries(subChannelMap)
+    .map(([name, data]) => ({
+      name,
+      value: data.value,
+      percentage: total > 0 ? (data.value / total) * 100 : 0,
+      macroArea: data.macroArea
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  return { macroAreas, subChannels };
 }

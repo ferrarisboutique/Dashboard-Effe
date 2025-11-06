@@ -3,7 +3,7 @@ import { SalesChart } from "./SalesChart";
 import { InventoryStats } from "./InventoryStats";
 import { Sale, Return } from "../types/dashboard";
 import { InventoryItem } from "../types/inventory";
-import { calculateMetrics, getSalesByDate, getBrandData, getCategoryData, filterDataByDateRange } from "../utils/analytics";
+import { calculateMetrics, getSalesByDate, getBrandData, getCategoryData, filterDataByDateAdvanced, calculateYoYChange } from "../utils/analytics";
 import { TrendingUp, ShoppingBag, Target } from "lucide-react";
 
 interface DashboardOverviewProps {
@@ -11,19 +11,57 @@ interface DashboardOverviewProps {
   returns: Return[];
   inventory: InventoryItem[];
   dateRange: string;
+  customStart?: string;
+  customEnd?: string;
   totalInventoryCount?: number;
 }
 
-export function DashboardOverview({ sales, returns, inventory, dateRange, totalInventoryCount }: DashboardOverviewProps) {
+export function DashboardOverview({ sales, returns, inventory, dateRange, customStart, customEnd, totalInventoryCount }: DashboardOverviewProps) {
   // Apply date filter to sales and returns
-  const filteredSales = filterDataByDateRange(sales, dateRange);
-  const filteredReturns = filterDataByDateRange(returns, dateRange);
+  const filteredSales = filterDataByDateAdvanced(sales, dateRange, customStart, customEnd);
+  const filteredReturns = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
   
   const metrics = calculateMetrics(filteredSales, filteredReturns, inventory);
   const salesByDate = getSalesByDate(filteredSales, 30); // Use filtered data
   
   const brandData = getBrandData(filteredSales);
   const categoryData = getCategoryData(filteredSales);
+
+  // Calculate YoY changes
+  const totalSalesYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => s.reduce((sum, sale) => sum + sale.amount, 0));
+  const totalReturnsYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
+    const filtered = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
+    return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+  });
+  const returnRateYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
+    const filtered = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
+    const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+    const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+    return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
+  });
+  const marginYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
+    const normalizeSku = (sku?: string) => (sku || '').toString().trim().toUpperCase();
+    const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+    const totalCost = s.reduce((sum, sale) => {
+      const saleSku = normalizeSku((sale as any).sku || sale.productId);
+      if (!saleSku) return sum;
+      const inventoryItem = inventory.find(item => normalizeSku(item.sku) === saleSku);
+      return sum + (inventoryItem ? inventoryItem.purchasePrice * sale.quantity : 0);
+    }, 0);
+    return totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
+  });
+  const negozioDonnaYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => 
+    s.filter(sale => sale.channel === 'negozio_donna').reduce((sum, sale) => sum + sale.amount, 0)
+  );
+  const negozioUomoYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => 
+    s.filter(sale => sale.channel === 'negozio_uomo').reduce((sum, sale) => sum + sale.amount, 0)
+  );
+  const ecommerceYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => 
+    s.filter(sale => sale.channel === 'ecommerce').reduce((sum, sale) => sum + sale.amount, 0)
+  );
+  const marketplaceYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => 
+    s.filter(sale => sale.channel === 'marketplace').reduce((sum, sale) => sum + sale.amount, 0)
+  );
 
   // Handle empty data state within sections
   const hasData = filteredSales.length > 0;
@@ -44,34 +82,33 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, totalI
           title="Fatturato Totale"
           value={metrics.totalSales}
           prefix="€"
-          change={14.2}
-          changeType="increase"
-          description="Tutti i canali"
-          badge="Questo mese"
-          badgeVariant="secondary"
+          change={totalSalesYoY.change}
+          changeType={totalSalesYoY.changeType}
+          description="Variazione vs anno precedente"
         />
         <MetricCard
           title="Resi Totali"
           value={metrics.totalReturns}
           prefix="€"
-          change={-5.1}
-          changeType="decrease"
-          description="Tutti i canali"
+          change={totalReturnsYoY.change}
+          changeType={totalReturnsYoY.changeType}
+          description="Variazione vs anno precedente"
         />
         <MetricCard
           title="Tasso di Reso"
           value={metrics.returnRate.toFixed(1)}
           suffix="%"
-          changeType="decrease"
-          description="Media ponderata"
+          change={returnRateYoY.change}
+          changeType={returnRateYoY.changeType}
+          description="Variazione vs anno precedente"
         />
         <MetricCard
           title="Marginalità Media"
           value={metrics.margin.toFixed(1)}
           suffix="%"
-          change={2.3}
-          changeType="increase"
-          description="Su tutti i prodotti"
+          change={marginYoY.change}
+          changeType={marginYoY.changeType}
+          description="Variazione vs anno precedente"
         />
       </div>
 
@@ -81,33 +118,33 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, totalI
           title="Negozio Donna"
           value={metrics.salesByChannel.negozio_donna}
           prefix="€"
-          change={12.5}
-          changeType="increase"
-          badge="Top"
-          badgeVariant="default"
+          change={negozioDonnaYoY.change}
+          changeType={negozioDonnaYoY.changeType}
+          description="Variazione vs anno precedente"
         />
         <MetricCard
           title="Negozio Uomo"
           value={metrics.salesByChannel.negozio_uomo}
           prefix="€"
-          change={-5.3}
-          changeType="decrease"
+          change={negozioUomoYoY.change}
+          changeType={negozioUomoYoY.changeType}
+          description="Variazione vs anno precedente"
         />
         <MetricCard
           title="E-commerce"
           value={metrics.salesByChannel.ecommerce}
           prefix="€"
-          change={18.7}
-          changeType="increase"
-          badge="Crescita"
-          badgeVariant="secondary"
+          change={ecommerceYoY.change}
+          changeType={ecommerceYoY.changeType}
+          description="Variazione vs anno precedente"
         />
         <MetricCard
           title="Marketplace"
           value={metrics.salesByChannel.marketplace}
           prefix="€"
-          change={11.2}
-          changeType="increase"
+          change={marketplaceYoY.change}
+          changeType={marketplaceYoY.changeType}
+          description="Variazione vs anno precedente"
         />
       </div>
 

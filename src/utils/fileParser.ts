@@ -203,6 +203,14 @@ export function validateAndProcessSalesData(rawData: any[]): UploadResult {
       // Calculate total amount
       const amount = Number((quantity * price).toFixed(2));
 
+      // Extract payment method if available (check multiple possible column names)
+      const paymentMethod = row['Metodo di pagamento'] || 
+                           row['Metodo Pagamento'] || 
+                           row['Payment Method'] || 
+                           row['PaymentMethod'] ||
+                           row['Metodo'] ||
+                           undefined;
+
       processedData.push({
         date,
         user: row.Utente,
@@ -210,7 +218,8 @@ export function validateAndProcessSalesData(rawData: any[]): UploadResult {
         sku: row.SKU.toString(),
         quantity,
         price,
-        amount
+        amount,
+        paymentMethod: paymentMethod ? paymentMethod.toString().trim() : undefined
       });
 
     } catch (error) {

@@ -1,10 +1,6 @@
-import { Hono } from 'npm:hono';
+// Sales routes - Native Deno (no Hono)
 import * as kv from './kv_store.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
-
-const app = new Hono();
-
-// CORS is handled globally in index.ts - no need to configure it here
 
 interface SaleData {
   id?: string;
@@ -20,6 +16,7 @@ interface SaleData {
   brand?: string;
   category?: string;
   season?: string;
+  paymentMethod?: string;
 }
 
 // Helper: fetch all sales with pagination to bypass 1000 row limit
@@ -29,7 +26,6 @@ const getAllSalesItems = async (): Promise<Array<{ key: string; value: any }>> =
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
   );
 
-  // Get exact count first
   const { count, error: countError } = await supabase
     .from("kv_store_49468be0")
     .select("*", { count: 'exact', head: true })
@@ -41,7 +37,6 @@ const getAllSalesItems = async (): Promise<Array<{ key: string; value: any }>> =
 
   if (!count || count === 0) return [];
 
-  // If <= 1000, fetch all in one go
   if (count <= 1000) {
     const { data, error } = await supabase
       .from("kv_store_49468be0")
@@ -52,7 +47,6 @@ const getAllSalesItems = async (): Promise<Array<{ key: string; value: any }>> =
     return data?.map(d => ({ key: d.key, value: d.value })) ?? [];
   }
 
-  // Paginate in chunks of 1000
   const pageSize = 1000;
   const pages = Math.ceil(count / pageSize);
   const all: Array<{ key: string; value: any }> = [];
@@ -70,13 +64,25 @@ const getAllSalesItems = async (): Promise<Array<{ key: string; value: any }>> =
   return all;
 };
 
+// Helper: normalize SKU - very aggressive normalization for better matching
+const normalizeSku = (s?: string): string => {
+  if (!s) return '';
+  // Convert to string, trim, uppercase
+  let normalized = s.toString().trim().toUpperCase();
+  // Remove ALL separators, spaces, and special characters (keep only alphanumeric)
+  normalized = normalized.replace(/[-_\.\/\s]/g, '');
+  // Remove any other non-alphanumeric characters
+  normalized = normalized.replace(/[^A-Z0-9]/g, '');
+  return normalized;
+};
+
 // Helper: build inventory map sku -> { brand, purchasePrice }
+// Also create a map with multiple normalization variants for better matching
 const getInventoryMap = async (): Promise<Record<string, { brand?: string; purchasePrice?: number }>> => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL"),
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
   );
-  const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
   const map: Record<string, { brand?: string; purchasePrice?: number }> = {};
 
   const { count, error: countError } = await supabase
@@ -97,423 +103,748 @@ const getInventoryMap = async (): Promise<Record<string, { brand?: string; purch
       .like("key", "inventory_%")
       .range(from, to);
     if (error) throw new Error(error.message);
-    (data || []).forEach((row: any) => {
-      const v = row.value || {};
-      const key = normalizeSku(v.sku);
-      if (key) {
-        map[key] = { brand: v.brand, purchasePrice: v.purchasePrice };
-      }
-    });
+      (data || []).forEach((row: any) => {
+        const v = row.value || {};
+        const sku = v.sku;
+        if (sku) {
+          const skuStr = sku.toString();
+          
+          // Store with normalized key (most aggressive)
+          const normalizedKey = normalizeSku(skuStr);
+          if (normalizedKey) {
+            map[normalizedKey] = { brand: v.brand, purchasePrice: v.purchasePrice };
+          }
+          
+          // Also store with original SKU (uppercase, trimmed, no separators) for fallback
+          const originalKey = skuStr.trim().toUpperCase().replace(/[-_\.\/\s]/g, '');
+          if (originalKey && originalKey !== normalizedKey) {
+            if (!map[originalKey]) {
+              map[originalKey] = { brand: v.brand, purchasePrice: v.purchasePrice };
+            }
+          }
+          
+          // Also store with just uppercase/trimmed (in case separators are important)
+          const simpleKey = skuStr.trim().toUpperCase();
+          if (simpleKey && simpleKey !== normalizedKey && simpleKey !== originalKey) {
+            if (!map[simpleKey]) {
+              map[simpleKey] = { brand: v.brand, purchasePrice: v.purchasePrice };
+            }
+          }
+        }
+      });
   }
   return map;
 };
 
-// Get all sales data - return flat Sale objects (no KV wrappers)
-app.get('/sales', async (c) => {
+// JSON response helper
+function jsonResponse(data: any, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
+}
+
+// Main sales routes handler
+export async function handleSalesRoutes(req: Request, path: string, method: string): Promise<Response> {
   try {
-    const [kvItems, invMap] = await Promise.all([
-      getAllSalesItems(),
-      getInventoryMap()
-    ]);
-    const sales = kvItems.map((item: any) => {
-      const value = item.value || {};
-      // Ensure id exists inside value; fallback to key suffix
-      const id = value.id || item.key || `sale_${Math.random().toString(36).substr(2, 9)}`;
-      const normSku = ((value.productId || value.sku || '') + '').trim().toUpperCase();
-      const inv = invMap[normSku];
-      const brandFromInv = inv?.brand;
-      const purchasePrice = inv?.purchasePrice;
-      return {
-        id,
-        date: value.date,
-        user: value.user,
-        channel: value.channel,
-        sku: value.sku || value.productId,
-        productId: value.productId || value.sku,
-        quantity: value.quantity,
-        price: value.price,
-        amount: value.amount,
-        brand: value.brand && value.brand !== 'Unknown' ? value.brand : (brandFromInv || 'Unknown'),
-        category: value.category || 'abbigliamento',
-        season: value.season || 'autunno_inverno',
-        marketplace: value.marketplace,
-        // supply purchasePrice to help client margin if needed
-        purchasePrice
-      } as SaleData;
-    });
-    return c.json({ success: true, data: sales });
-  } catch (error) {
-    return c.json({ success: false, error: (error as Error).message }, 500);
-  }
-});
-
-// Save bulk sales data (from upload)
-app.post('/sales/bulk', async (c) => {
-  try {
-    const requestBody = await c.req.json();
-    const { sales } = requestBody;
-    
-    if (!sales) {
-      return c.json({ success: false, error: 'No sales data provided' }, 400);
+    // GET /sales
+    if (path === '/sales' && method === 'GET') {
+      const [kvItems, invMap] = await Promise.all([
+        getAllSalesItems(),
+        getInventoryMap()
+      ]);
+      const sales = kvItems.map((item: any) => {
+        const value = item.value || {};
+        const id = value.id || item.key || `sale_${Math.random().toString(36).substr(2, 9)}`;
+        const sku = value.sku || value.productId;
+        if (!sku) {
+          // No SKU, use existing brand or Unknown
+          return {
+            id,
+            date: value.date,
+            user: value.user,
+            channel: value.channel,
+            sku: value.sku || value.productId,
+            productId: value.productId || value.sku,
+            quantity: value.quantity,
+            price: value.price,
+            amount: value.amount,
+            brand: value.brand && value.brand !== 'Unknown' ? value.brand : 'Unknown',
+            category: value.category || 'abbigliamento',
+            season: value.season || 'autunno_inverno',
+            marketplace: value.marketplace,
+            paymentMethod: value.paymentMethod,
+            purchasePrice: undefined
+          } as SaleData;
+        }
+        
+        const skuStr = sku.toString();
+        const normSku = normalizeSku(skuStr);
+        const originalSku = skuStr.trim().toUpperCase().replace(/[-_\.\/\s]/g, '');
+        const simpleSku = skuStr.trim().toUpperCase();
+        
+        // Try all variants: normalized, original without separators, simple uppercase
+        let inv = invMap[normSku];
+        if (!inv && originalSku !== normSku) {
+          inv = invMap[originalSku];
+        }
+        if (!inv && simpleSku !== normSku && simpleSku !== originalSku) {
+          inv = invMap[simpleSku];
+        }
+        
+        const brandFromInv = inv?.brand;
+        const purchasePrice = inv?.purchasePrice;
+        return {
+          id,
+          date: value.date,
+          user: value.user,
+          channel: value.channel,
+          sku: value.sku || value.productId,
+          productId: value.productId || value.sku,
+          quantity: value.quantity,
+          price: value.price,
+          amount: value.amount,
+          brand: value.brand && value.brand !== 'Unknown' ? value.brand : (brandFromInv || 'Unknown'),
+          category: value.category || 'abbigliamento',
+            season: value.season || 'autunno_inverno',
+            marketplace: value.marketplace,
+            paymentMethod: value.paymentMethod,
+            purchasePrice
+          } as SaleData;
+      });
+      return jsonResponse({ success: true, data: sales });
     }
-    
-    if (!Array.isArray(sales)) {
-      return c.json({ success: false, error: 'Sales data must be an array' }, 400);
+
+    // GET /sales/payment-mappings
+    if (path === '/sales/payment-mappings' && method === 'GET') {
+      try {
+        const mappings: Record<string, { macroArea: string; channel: string }> = {};
+        const allKeys = await kv.getByPrefix('payment_mapping_');
+        
+        for (const item of allKeys) {
+          const key = item.key;
+          const paymentMethod = key.replace('payment_mapping_', '');
+          const mapping = item.value || {};
+          if (mapping.macroArea && mapping.channel) {
+            mappings[paymentMethod] = {
+              macroArea: mapping.macroArea,
+              channel: mapping.channel
+            };
+          }
+        }
+        
+        return jsonResponse({
+          success: true,
+          mappings
+        });
+      } catch (error) {
+        const errorDetails = error instanceof Error ? error.message : String(error);
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Failed to load payment mappings',
+            details: errorDetails
+          },
+          500
+        );
+      }
     }
 
-    // Get existing sales to check for duplicates (all pages)
-    // ALSO load inventory map to match SKUs to brands during save
-    const [existingSalesData, invMap] = await Promise.all([
-      getAllSalesItems(),
-      getInventoryMap()
-    ]);
-    
-    // Load learned mappings for auto-correction
-    const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
-    const userKey = (u?: string) => (u || '').toString().trim().toLowerCase();
-    
-    // Create a Set of unique sale signatures (date+sku+quantity+amount)
-    const existingSalesSignatures = new Set(
-      existingSalesData.map((s: any) => {
-        const sale = s.value || s;
-        // Include time in date if present to ensure uniqueness per second
-        return `${sale.date}_${sale.productId || sale.sku}_${sale.quantity}_${sale.amount}`;
-      })
-    );
+    // POST /sales/payment-mappings
+    if (path === '/sales/payment-mappings' && method === 'POST') {
+      try {
+        const body = await req.json();
+        const { mappings } = body;
+        
+        if (!mappings || typeof mappings !== 'object') {
+          return jsonResponse(
+            {
+              success: false,
+              error: 'Invalid mappings data'
+            },
+            400
+          );
+        }
+        
+        const mappingData: Record<string, any> = {};
+        for (const [paymentMethod, mapping] of Object.entries(mappings)) {
+          const mappingObj = mapping as { macroArea: string; channel: string };
+          if (mappingObj.macroArea && mappingObj.channel) {
+            mappingData[`payment_mapping_${paymentMethod}`] = {
+              macroArea: mappingObj.macroArea,
+              channel: mappingObj.channel
+            };
+          }
+        }
+        
+        if (Object.keys(mappingData).length > 0) {
+          await kv.mset(mappingData);
+        }
+        
+        return jsonResponse({
+          success: true,
+          message: `Saved ${Object.keys(mappingData).length} payment method mappings`
+        });
+      } catch (error) {
+        const errorDetails = error instanceof Error ? error.message : String(error);
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Failed to save payment mappings',
+            details: errorDetails
+          },
+          500
+        );
+      }
+    }
 
-    const salesToSave: Record<string, SaleData> = {};
-    const timestamp = Date.now();
-    let skippedDuplicates = 0;
-    let processedCount = 0;
-    let mappingsApplied = 0;
-    let brandsFromInventory = 0;
-    
-    for (let index = 0; index < sales.length; index++) {
-      const sale = sales[index];
+    // POST /sales/bulk
+    if (path === '/sales/bulk' && method === 'POST') {
+      const requestBody = await req.json();
+      const { sales } = requestBody;
       
-      // Map SKU to productId for consistency
-      const sku = sale.sku || sale.productId;
-      // sale.date can be ISO with time if provided by upload; this keeps distinct timestamps unique
-      const saleSignature = `${sale.date}_${sku}_${sale.quantity}_${sale.amount}`;
-      
-      if (existingSalesSignatures.has(saleSignature)) {
-        skippedDuplicates++;
-        continue;
+      if (!sales) {
+        return jsonResponse({ success: false, error: 'No sales data provided' }, 400);
       }
       
-      existingSalesSignatures.add(saleSignature);
+      if (!Array.isArray(sales)) {
+        return jsonResponse({ success: false, error: 'Sales data must be an array' }, 400);
+      }
+
+      const [existingSalesData, invMap, paymentMappingsData] = await Promise.all([
+        getAllSalesItems(),
+        getInventoryMap(),
+        (async () => {
+          try {
+            const mappings: Record<string, { macroArea: string; channel: string }> = {};
+            const allKeys = await kv.getByPrefix('payment_mapping_');
+            for (const item of allKeys) {
+              const key = item.key;
+              const paymentMethod = key.replace('payment_mapping_', '');
+              const mapping = item.value || {};
+              if (mapping.macroArea && mapping.channel) {
+                mappings[paymentMethod] = {
+                  macroArea: mapping.macroArea,
+                  channel: mapping.channel
+                };
+              }
+            }
+            return mappings;
+          } catch (e) {
+            return {};
+          }
+        })()
+      ]);
       
-      // Auto-apply learned mappings and inventory lookup
-      let brand = sale.brand || 'Unknown';
-      let channel = sale.channel;
+      // Use the same normalizeSku function defined at top level
+      const userKey = (u?: string) => (u || '').toString().trim().toLowerCase();
       
-      // Priority 1: Check inventory map if brand is Unknown or missing
+      const existingSalesSignatures = new Set(
+        existingSalesData.map((s: any) => {
+          const sale = s.value || s;
+          return `${sale.date}_${sale.productId || sale.sku}_${sale.quantity}_${sale.amount}`;
+        })
+      );
+
+      const salesToSave: Record<string, SaleData> = {};
+      const timestamp = Date.now();
+      let skippedDuplicates = 0;
+      let processedCount = 0;
+      let mappingsApplied = 0;
+      let brandsFromInventory = 0;
+      
+      for (let index = 0; index < sales.length; index++) {
+        const sale = sales[index];
+        const sku = sale.sku || sale.productId;
+        const saleSignature = `${sale.date}_${sku}_${sale.quantity}_${sale.amount}`;
+        
+        if (existingSalesSignatures.has(saleSignature)) {
+          skippedDuplicates++;
+          continue;
+        }
+        
+        existingSalesSignatures.add(saleSignature);
+        
+        let brand = sale.brand || 'Unknown';
+        let channel = sale.channel;
+        const paymentMethod = sale.paymentMethod;
+        
+        // Apply payment method mapping if available
+        if (paymentMethod && paymentMappingsData[paymentMethod]) {
+          const mapping = paymentMappingsData[paymentMethod];
+          // Override channel based on mapping
+          if (mapping.channel === 'ecommerce' || mapping.channel === 'marketplace') {
+            channel = mapping.channel;
+          }
+        }
+        
+        // Priority 1: Check inventory map if brand is Unknown or missing
+        // Use same normalization logic as GET /sales for consistency
+        if ((brand === 'Unknown' || !brand) && sku) {
+          const skuStr = sku.toString();
+          const normSku = normalizeSku(skuStr);
+          const originalSku = skuStr.trim().toUpperCase().replace(/[-_\.\/\s]/g, '');
+          const simpleSku = skuStr.trim().toUpperCase();
+          
+          // Try all variants: normalized, original without separators, simple uppercase
+          let invItem = invMap[normSku];
+          if (!invItem && originalSku !== normSku) {
+            invItem = invMap[originalSku];
+          }
+          if (!invItem && simpleSku !== normSku && simpleSku !== originalSku) {
+            invItem = invMap[simpleSku];
+          }
+          
+          if (invItem && invItem.brand) {
+            brand = invItem.brand;
+            brandsFromInventory++;
+          }
+        }
+        
+        // Priority 2: Check learned brand mapping if still Unknown
+        if (brand === 'Unknown' && sku) {
+          try {
+            const brandMapping = await kv.get(`mapping_brand_${normalizeSku(sku.toString())}`);
+            if (brandMapping && brandMapping.brand) {
+              brand = brandMapping.brand;
+              mappingsApplied++;
+            }
+          } catch (e) {
+            // Mapping not found
+          }
+        }
+        
+        if (sale.user && (!channel || channel === 'unknown')) {
+          try {
+            const channelMapping = await kv.get(`mapping_channel_${userKey(sale.user)}`);
+            if (channelMapping && channelMapping.channel) {
+              channel = channelMapping.channel;
+              mappingsApplied++;
+            }
+          } catch (e) {
+            // Mapping not found
+          }
+        }
+        
+        const saleId = `sale_${timestamp}_${index}`;
+        salesToSave[saleId] = {
+          id: saleId,
+          date: sale.date,
+          user: sale.user || 'unknown',
+          channel: channel,
+          sku: sku,
+          productId: sku,
+          quantity: sale.quantity,
+          price: sale.price,
+          amount: sale.amount,
+          brand: brand,
+          category: sale.category || 'abbigliamento',
+          season: sale.season || 'autunno_inverno',
+          marketplace: sale.marketplace,
+          paymentMethod: paymentMethod
+        };
+        processedCount++;
+      }
+
+      const keys = Object.keys(salesToSave);
+      
+      if (keys.length > 0) {
+        await kv.mset(salesToSave);
+      }
+      
+      let message = `${processedCount} vendite caricate con successo`;
+      if (skippedDuplicates > 0) {
+        message += ` (${skippedDuplicates} vendite duplicate ignorate)`;
+      }
+      if (brandsFromInventory > 0) {
+        message += ` (${brandsFromInventory} brand attribuiti dall'inventario)`;
+      }
+      if (mappingsApplied > 0) {
+        message += ` (${mappingsApplied} mapping auto-applicati)`;
+      }
+      
+      return jsonResponse({ 
+        success: true, 
+        message,
+        savedCount: processedCount,
+        skippedDuplicates,
+        brandsFromInventory,
+        mappingsApplied
+      });
+    }
+
+    // DELETE /sales/all
+    if (path === '/sales/all' && method === 'DELETE') {
+      let deleted = 0;
+      if ((kv as any).delByPrefix) {
+        deleted = await (kv as any).delByPrefix('sale_');
+      } else {
+        const salesData = await kv.getByPrefix('sale_');
+        const saleKeys = salesData.map((sale: any) => sale.key);
+        const BATCH = 500;
+        for (let i = 0; i < saleKeys.length; i += BATCH) {
+          const batch = saleKeys.slice(i, i + BATCH);
+        if (batch.length > 0) {
+            await kv.mdel(batch);
+            deleted += batch.length;
+          }
+        }
+      }
+      return jsonResponse({ 
+        success: true, 
+        deletedCount: deleted,
+        message: `Deleted ${deleted} sales records`
+      });
+    }
+
+    // POST /sales
+    if (path === '/sales' && method === 'POST') {
+      const saleData = await req.json();
+      
+      const invMap = await getInventoryMap();
+      const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
+      
+      let brand = saleData.brand || 'Unknown';
+      const sku = saleData.sku || saleData.productId;
+      
       if ((brand === 'Unknown' || !brand) && sku) {
         const normSku = normalizeSku(sku);
         const invItem = invMap[normSku];
         if (invItem && invItem.brand) {
           brand = invItem.brand;
-          brandsFromInventory++;
         }
       }
       
-      // Priority 2: Check learned brand mapping if still Unknown
       if (brand === 'Unknown' && sku) {
         try {
           const brandMapping = await kv.get(`mapping_brand_${normalizeSku(sku)}`);
           if (brandMapping && brandMapping.brand) {
             brand = brandMapping.brand;
-            mappingsApplied++;
           }
         } catch (e) {
-          // Mapping not found, continue with Unknown
+          // Mapping not found
         }
       }
       
-      // Check channel mapping if channel is missing or user mapping exists
-      if (sale.user && (!channel || channel === 'unknown')) {
-        try {
-          const channelMapping = await kv.get(`mapping_channel_${userKey(sale.user)}`);
-          if (channelMapping && channelMapping.channel) {
-            channel = channelMapping.channel;
-            mappingsApplied++;
-          }
-        } catch (e) {
-          // Mapping not found, continue with provided channel
-        }
-      }
-      
-      const saleId = `sale_${timestamp}_${index}`;
-      salesToSave[saleId] = {
+      const saleId = `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const sale: SaleData = {
+        ...saleData,
         id: saleId,
-        date: sale.date,
-        user: sale.user || 'unknown',
-        channel: channel,
-        sku: sku,
-        productId: sku,
-        quantity: sale.quantity,
-        price: sale.price,
-        amount: sale.amount,
         brand: brand,
-        category: sale.category || 'abbigliamento',
-        season: sale.season || 'autunno_inverno',
-        marketplace: sale.marketplace
+        paymentMethod: saleData.paymentMethod
       };
-      processedCount++;
-    }
-
-    const keys = Object.keys(salesToSave);
-    
-    if (keys.length > 0) {
-      await kv.mset(salesToSave);
-    }
-    
-    let message = `${processedCount} vendite caricate con successo`;
-    if (skippedDuplicates > 0) {
-      message += ` (${skippedDuplicates} vendite duplicate ignorate)`;
-    }
-    if (brandsFromInventory > 0) {
-      message += ` (${brandsFromInventory} brand attribuiti dall'inventario)`;
-    }
-    if (mappingsApplied > 0) {
-      message += ` (${mappingsApplied} mapping auto-applicati)`;
-    }
-    
-    return c.json({ 
-      success: true, 
-      message,
-      savedCount: processedCount,
-      skippedDuplicates,
-      brandsFromInventory,
-      mappingsApplied
-    });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return c.json({ success: false, error: errorMessage }, 500);
-  }
-});
-
-// Clear all sales data (batched)
-app.delete('/sales/all', async (c) => {
-  try {
-    // Prefer a single statement delete by prefix
-    // If delByPrefix is unavailable, fallback to batched delete
-    let deleted = 0;
-    if ((kv as any).delByPrefix) {
-      deleted = await (kv as any).delByPrefix('sale_');
-    } else {
-      const salesData = await kv.getByPrefix('sale_');
-      const saleKeys = salesData.map((sale: any) => sale.key);
-      const BATCH = 500;
-      for (let i = 0; i < saleKeys.length; i += BATCH) {
-        const batch = saleKeys.slice(i, i + BATCH);
-        if (batch.length > 0) {
-          await kv.mdel(batch);
-          deleted += batch.length;
-        }
-      }
-    }
-    return c.json({ 
-      success: true, 
-      deletedCount: deleted,
-      message: `Deleted ${deleted} sales records`
-    });
-  } catch (error) {
-    return c.json({ success: false, error: (error as Error).message }, 500);
-  }
-});
-
-// Save single sale
-app.post('/sales', async (c) => {
-  try {
-    const saleData = await c.req.json();
-    
-    // Load inventory map to match SKU to brand
-    const invMap = await getInventoryMap();
-    const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
-    
-    let brand = saleData.brand || 'Unknown';
-    const sku = saleData.sku || saleData.productId;
-    
-    // Priority 1: Check inventory map if brand is Unknown or missing
-    if ((brand === 'Unknown' || !brand) && sku) {
-      const normSku = normalizeSku(sku);
-      const invItem = invMap[normSku];
-      if (invItem && invItem.brand) {
-        brand = invItem.brand;
-      }
-    }
-    
-    // Priority 2: Check learned brand mapping if still Unknown
-    if (brand === 'Unknown' && sku) {
-      try {
-        const brandMapping = await kv.get(`mapping_brand_${normalizeSku(sku)}`);
-        if (brandMapping && brandMapping.brand) {
-          brand = brandMapping.brand;
-        }
-      } catch (e) {
-        // Mapping not found, continue with Unknown
-      }
-    }
-    
-    const saleId = `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const sale: SaleData = {
-      ...saleData,
-      id: saleId,
-      brand: brand
-    };
-    
-    await kv.set(saleId, sale);
-    
-    return c.json({ success: true, data: sale });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return c.json({ success: false, error: errorMessage }, 500);
-  }
-});
-
-// Delete sale by ID
-app.delete('/sales/:id', async (c) => {
-  try {
-    const saleId = c.req.param('id');
-    await kv.del(saleId);
-    
-    return c.json({ success: true, message: 'Sale deleted' });
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    return c.json({ success: false, error: errorMessage }, 500);
-  }
-});
-
-// Update existing sales with brands from inventory
-// This fixes sales that were uploaded before the inventory lookup was implemented
-app.post('/sales/update-brands-from-inventory', async (c) => {
-  try {
-    const [kvItems, invMap] = await Promise.all([
-      getAllSalesItems(),
-      getInventoryMap()
-    ]);
-    
-    const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
-    const updates: Record<string, SaleData> = {};
-    let updatedCount = 0;
-    
-    for (const item of kvItems) {
-      const value = item.value || {};
-      const currentBrand = value.brand;
       
-      // Only update if brand is Unknown or missing
-      if ((!currentBrand || currentBrand === 'Unknown') && value.sku) {
-        const normSku = normalizeSku(value.sku || value.productId);
-        const invItem = invMap[normSku];
+      await kv.set(saleId, sale);
+      
+      return jsonResponse({ success: true, data: sale });
+    }
+
+    // DELETE /sales/:id
+    const deleteMatch = path.match(/^\/sales\/(.+)$/);
+    if (deleteMatch && method === 'DELETE') {
+      const saleId = deleteMatch[1];
+      await kv.del(saleId);
+      return jsonResponse({ success: true, message: 'Sale deleted' });
+    }
+
+    // POST /sales/update-brands-from-inventory
+    if (path === '/sales/update-brands-from-inventory' && method === 'POST') {
+      const [kvItems, invMap] = await Promise.all([
+        getAllSalesItems(),
+        getInventoryMap()
+      ]);
+      
+      const updates: Record<string, SaleData> = {};
+      let updatedCount = 0;
+      let noSkuCount = 0;
+      let noMatchCount = 0;
+      let alreadyHasBrandCount = 0;
+      
+      for (const item of kvItems) {
+        const value = item.value || {};
+        const currentBrand = value.brand;
+        
+        // Skip if already has a valid brand
+        if (currentBrand && currentBrand !== 'Unknown' && currentBrand.trim() !== '') {
+          alreadyHasBrandCount++;
+          continue;
+        }
+        
+        // Get SKU from either sku or productId field
+        const sku = value.sku || value.productId;
+        
+        if (!sku || sku.toString().trim() === '') {
+          noSkuCount++;
+          continue;
+        }
+        
+        // Try multiple normalization approaches
+        const skuStr = sku.toString();
+        const normSku = normalizeSku(skuStr);
+        const originalSku = skuStr.trim().toUpperCase().replace(/[-_\.\/\s]/g, '');
+        const simpleSku = skuStr.trim().toUpperCase();
+        
+        // Try all variants: normalized, original without separators, simple uppercase
+        let invItem = invMap[normSku];
+        if (!invItem && originalSku !== normSku) {
+          invItem = invMap[originalSku];
+        }
+        if (!invItem && simpleSku !== normSku && simpleSku !== originalSku) {
+          invItem = invMap[simpleSku];
+        }
         
         if (invItem && invItem.brand) {
-          // Update the sale with brand from inventory
           updates[item.key] = {
             ...value,
             brand: invItem.brand
           };
           updatedCount++;
+        } else {
+          noMatchCount++;
         }
       }
+      
+      if (Object.keys(updates).length > 0) {
+        await kv.mset(updates);
+      }
+      
+      return jsonResponse({
+        success: true,
+        message: `${updatedCount} vendite aggiornate con brand dall'inventario`,
+        updatedCount,
+        stats: {
+          total: kvItems.length,
+          updated: updatedCount,
+          noSku: noSkuCount,
+          noMatch: noMatchCount,
+          alreadyHasBrand: alreadyHasBrandCount
+        }
+      });
     }
-    
-    // Apply updates in batch
-    if (Object.keys(updates).length > 0) {
-      await kv.mset(updates);
+
+    // GET /sales/orphans
+    if (path === '/sales/orphans' && method === 'GET') {
+      const [kvItems, invMap] = await Promise.all([
+        getAllSalesItems(),
+        getInventoryMap()
+      ]);
+      const validChannels = ['negozio_donna', 'negozio_uomo', 'ecommerce', 'marketplace'];
+      const orphans = kvItems
+        .map((item: any) => ({ key: item.key, value: item.value || {} }))
+        .filter(({ value }) => {
+          const normSku = ((value.productId || value.sku || '') + '').trim().toUpperCase();
+          const inv = invMap[normSku];
+          const hasBrand = (value.brand && value.brand !== 'Unknown') || (inv && inv.brand);
+          const hasValidChannel = value.channel && validChannels.includes(value.channel);
+          return !hasBrand || !hasValidChannel;
+        })
+        .map(({ key, value }) => ({
+          id: key,
+          date: value.date,
+          user: value.user,
+          channel: value.channel,
+          sku: value.sku || value.productId,
+          amount: value.amount,
+          brand: value.brand || null
+        }));
+      return jsonResponse({ success: true, data: orphans });
     }
-    
-    return c.json({
-      success: true,
-      message: `${updatedCount} vendite aggiornate con brand dall'inventario`,
-      updatedCount
-    });
+
+    // POST /sales/bulk-update
+    if (path === '/sales/bulk-update' && method === 'POST') {
+      const { updates } = await req.json();
+      if (!Array.isArray(updates)) return jsonResponse({ success: false, error: 'updates must be array' }, 400);
+      let updated = 0;
+      for (const up of updates) {
+        const id = up.id;
+        if (!id) continue;
+        const existing = await kv.get(id);
+        if (!existing) continue;
+        const next = { ...existing } as any;
+        if (up.brand) next.brand = up.brand;
+        if (up.channel) next.channel = up.channel;
+        await kv.set(id, next);
+        updated++;
+      }
+      return jsonResponse({ success: true, updated });
+    }
+
+    // GET /sales/unknown-analysis - Analyze Unknown brand sales and find potential matches
+    if (path === '/sales/unknown-analysis' && method === 'GET') {
+      const [kvItems, invMap] = await Promise.all([
+        getAllSalesItems(),
+        getInventoryMap()
+      ]);
+      
+      const url = new URL(req.url);
+      const limit = Math.min(100, parseInt(url.searchParams.get('limit') || '50'));
+      
+      const unknownSales: Array<{ sku: string; normalized: string; amount: number }> = [];
+      const inventorySkuList: string[] = [];
+      
+      // Get all inventory SKUs (normalized)
+      for (const key of Object.keys(invMap)) {
+        inventorySkuList.push(key);
+      }
+      
+      // Find sales with Unknown brand
+      for (let i = 0; i < Math.min(limit * 10, kvItems.length); i++) {
+        const item = kvItems[i];
+        const value = item.value || {};
+        const sku = value.sku || value.productId;
+        const currentBrand = value.brand;
+        
+        if ((!currentBrand || currentBrand === 'Unknown') && sku) {
+          const skuStr = sku.toString();
+          const normSku = normalizeSku(skuStr);
+          
+          // Check if this SKU matches anything in inventory
+          const hasMatch = invMap[normSku] || 
+                          invMap[skuStr.trim().toUpperCase().replace(/[-_\.\/\s]/g, '')] ||
+                          invMap[skuStr.trim().toUpperCase()];
+          
+          if (!hasMatch) {
+            unknownSales.push({
+              sku: skuStr,
+              normalized: normSku,
+              amount: value.amount || 0
+            });
+            
+            if (unknownSales.length >= limit) break;
+          }
+        }
+      }
+      
+      // Try to find partial matches
+      const partialMatches: Array<{ saleSku: string; inventorySku: string; similarity: number }> = [];
+      
+      for (const unknown of unknownSales.slice(0, 20)) {
+        const normSale = unknown.normalized;
+        
+        // Try to find SKUs that contain parts of the sale SKU
+        for (const invSku of inventorySkuList) {
+          // Check if sale SKU contains inventory SKU or vice versa
+          if (normSale.length > 3 && invSku.length > 3) {
+            if (normSale.includes(invSku) || invSku.includes(normSale)) {
+              const similarity = Math.min(normSale.length, invSku.length) / Math.max(normSale.length, invSku.length);
+              if (similarity > 0.5) {
+                partialMatches.push({
+                  saleSku: unknown.sku,
+                  inventorySku: invSku,
+                  similarity: Math.round(similarity * 100)
+                });
+                break; // One match per sale SKU
+              }
+            }
+          }
+        }
+      }
+      
+      return jsonResponse({
+        success: true,
+        analysis: {
+          totalSales: kvItems.length,
+          unknownCount: unknownSales.length,
+          unknownSamples: unknownSales.slice(0, 20),
+          partialMatches: partialMatches.slice(0, 10),
+          inventorySize: inventorySkuList.length
+        }
+      });
+    }
+
+    // GET /sales/diagnose-skus - Diagnostic endpoint to analyze SKU matching issues
+    if (path === '/sales/diagnose-skus' && method === 'GET') {
+      const [kvItems, invMap] = await Promise.all([
+        getAllSalesItems(),
+        getInventoryMap()
+      ]);
+      
+      const url = new URL(req.url);
+      const limit = Math.min(50, parseInt(url.searchParams.get('limit') || '20'));
+      
+      const unmatched: Array<{ sku: string; normalized: string; original: string; brand: string | null }> = [];
+      const matched: Array<{ sku: string; brand: string }> = [];
+      const inventorySkuSamples: string[] = [];
+      
+      // Get sample inventory SKUs
+      let invCount = 0;
+      for (const [key, value] of Object.entries(invMap)) {
+        if (invCount < 10) {
+          inventorySkuSamples.push(key);
+          invCount++;
+        }
+      }
+      
+      // Analyze first N sales
+      for (let i = 0; i < Math.min(limit, kvItems.length); i++) {
+        const item = kvItems[i];
+        const value = item.value || {};
+        const sku = value.sku || value.productId;
+        const currentBrand = value.brand;
+        
+        if (!sku) continue;
+        
+        const originalSku = sku.toString().trim().toUpperCase();
+        const normSku = normalizeSku(sku);
+        
+        const invItem = invMap[normSku] || invMap[originalSku];
+        
+        if (invItem && invItem.brand) {
+          matched.push({ sku: originalSku, brand: invItem.brand });
+        } else if (!currentBrand || currentBrand === 'Unknown') {
+          unmatched.push({
+            sku: originalSku,
+            normalized: normSku,
+            original: sku.toString(),
+            brand: currentBrand
+          });
+        }
+      }
+      
+      return jsonResponse({
+        success: true,
+        analysis: {
+          totalSales: kvItems.length,
+          analyzed: Math.min(limit, kvItems.length),
+          matched: matched.length,
+          unmatched: unmatched.length,
+          unmatchedSamples: unmatched.slice(0, 10),
+          matchedSamples: matched.slice(0, 10),
+          inventorySkuSamples: inventorySkuSamples.slice(0, 10)
+        }
+      });
+    }
+
+    // POST /sales/learn
+    if (path === '/sales/learn' && method === 'POST') {
+      const body = await req.json();
+      const brandMappings = Array.isArray(body.brandMappings) ? body.brandMappings : [];
+      const channelMappings = Array.isArray(body.channelMappings) ? body.channelMappings : [];
+      const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
+      const userKey = (u?: string) => (u || '').toString().trim().toLowerCase();
+      let learned = 0;
+      for (const m of brandMappings) {
+        if (!m || !m.sku || !m.brand) continue;
+        await kv.set(`mapping_brand_${normalizeSku(m.sku)}`, { brand: m.brand });
+        learned++;
+      }
+      for (const m of channelMappings) {
+        if (!m || !m.user || !m.channel) continue;
+        await kv.set(`mapping_channel_${userKey(m.user)}`, { channel: m.channel });
+        learned++;
+      }
+      return jsonResponse({ success: true, learned });
+    }
+
+    // 404 for unknown sales routes
+    return jsonResponse({ error: 'Sales route not found' }, 404);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    return c.json({ success: false, error: errorMessage }, 500);
+    return jsonResponse({ success: false, error: errorMessage }, 500);
   }
-});
-
-export default app;
-
-// Additional endpoints: orphans listing and corrections/mapping
-
-// List orphan sales (missing brand or unknown; or invalid/missing channel)
-app.get('/sales/orphans', async (c) => {
-  try {
-    const [kvItems, invMap] = await Promise.all([
-      getAllSalesItems(),
-      getInventoryMap()
-    ]);
-    const validChannels = ['negozio_donna', 'negozio_uomo', 'ecommerce', 'marketplace'];
-    const orphans = kvItems
-      .map((item: any) => ({ key: item.key, value: item.value || {} }))
-      .filter(({ value }) => {
-        const normSku = ((value.productId || value.sku || '') + '').trim().toUpperCase();
-        const inv = invMap[normSku];
-        const hasBrand = (value.brand && value.brand !== 'Unknown') || (inv && inv.brand);
-        const hasValidChannel = value.channel && validChannels.includes(value.channel);
-        return !hasBrand || !hasValidChannel;
-      })
-      .map(({ key, value }) => ({
-        id: key,
-        date: value.date,
-        user: value.user,
-        channel: value.channel,
-        sku: value.sku || value.productId,
-        amount: value.amount,
-        brand: value.brand || null
-      }));
-    return c.json({ success: true, data: orphans });
-  } catch (error) {
-    return c.json({ success: false, error: (error as Error).message }, 500);
-  }
-});
-
-// Bulk update sales (brand/channel)
-app.post('/sales/bulk-update', async (c) => {
-  try {
-    const { updates } = await c.req.json();
-    if (!Array.isArray(updates)) return c.json({ success: false, error: 'updates must be array' }, 400);
-    let updated = 0;
-    for (const up of updates) {
-      const id = up.id;
-      if (!id) continue;
-      const existing = await kv.get(id);
-      if (!existing) continue;
-      const next = { ...existing } as any;
-      if (up.brand) next.brand = up.brand;
-      if (up.channel) next.channel = up.channel;
-      await kv.set(id, next);
-      updated++;
-    }
-    return c.json({ success: true, updated });
-  } catch (error) {
-    return c.json({ success: false, error: (error as Error).message }, 500);
-  }
-});
-
-// Learn mappings from corrections
-app.post('/sales/learn', async (c) => {
-  try {
-    const body = await c.req.json();
-    const brandMappings = Array.isArray(body.brandMappings) ? body.brandMappings : [];
-    const channelMappings = Array.isArray(body.channelMappings) ? body.channelMappings : [];
-    const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
-    const userKey = (u?: string) => (u || '').toString().trim().toLowerCase();
-    let learned = 0;
-    for (const m of brandMappings) {
-      if (!m || !m.sku || !m.brand) continue;
-      await kv.set(`mapping_brand_${normalizeSku(m.sku)}`, { brand: m.brand });
-      learned++;
-    }
-    for (const m of channelMappings) {
-      if (!m || !m.user || !m.channel) continue;
-      await kv.set(`mapping_channel_${userKey(m.user)}`, { channel: m.channel });
-      learned++;
-    }
-    return c.json({ success: true, learned });
-  } catch (error) {
-    return c.json({ success: false, error: (error as Error).message }, 500);
-  }
-});
+}

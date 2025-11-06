@@ -5,9 +5,7 @@ import { MetricCard } from "./MetricCard";
 import { SalesChart } from "./SalesChart";
 import { Sale, Return } from "../types/dashboard";
 import { InventoryItem } from "../types/inventory";
-import { calculateMetrics, getSalesByDate, getCategoryData, getBrandData, filterDataByDateRange, getMonthlySalesWithYOY, getSeasonData, getYoYForRange, filterDataByDateAdvanced } from "../utils/analytics";
-import { DateRange } from "react-day-picker";
-import { Input } from "./ui/input";
+import { calculateMetrics, getSalesByDate, getCategoryData, getBrandData, filterDataByDateRange, getMonthlySalesWithYOY, getSeasonData, getYoYForRange, filterDataByDateAdvanced, calculateYoYChange } from "../utils/analytics";
 import { Store, Users, ShoppingBag, TrendingUp } from "lucide-react";
 
 interface StoresSectionProps {
@@ -15,11 +13,11 @@ interface StoresSectionProps {
   returns: Return[];
   inventory: InventoryItem[];
   dateRange: string;
+  customStart?: string;
+  customEnd?: string;
 }
 
-export function StoresSection({ sales, returns, inventory, dateRange }: StoresSectionProps) {
-  const [customStart, setCustomStart] = React.useState<string | undefined>(undefined);
-  const [customEnd, setCustomEnd] = React.useState<string | undefined>(undefined);
+export function StoresSection({ sales, returns, inventory, dateRange, customStart, customEnd }: StoresSectionProps) {
   // Apply date filter first
   const filteredSales = filterDataByDateAdvanced(sales, dateRange, customStart, customEnd);
   const filteredReturns = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
@@ -54,77 +52,96 @@ export function StoresSection({ sales, returns, inventory, dateRange }: StoresSe
           <Store className="w-6 h-6" />
           Negozi Fisici
         </h2>
-        {dateRange === 'custom' && (
-          <div className="flex items-center gap-2 mb-4">
-            <Input type="date" value={customStart || ''} onChange={(e) => setCustomStart(e.target.value)} />
-            <span>→</span>
-            <Input type="date" value={customEnd || ''} onChange={(e) => setCustomEnd(e.target.value)} />
-          </div>
-        )}
       </div>
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {(() => {
-          // YoY change for selected range or last month fallback
-          let yoy = 0;
-          if (dateRange === 'custom' && customStart && customEnd) {
-            const r = getYoYForRange(filteredSales, customStart, customEnd);
-            yoy = r.changePct;
-          } else {
-            const months = getMonthlySalesWithYOY(filteredSales.filter(s => s.channel === 'negozio_donna' || s.channel === 'negozio_uomo'), 12);
-            const last = months[months.length - 1];
-            yoy = last && last.previous > 0 ? ((last.current - last.previous) / last.previous) * 100 : 0;
-          }
+          const totalStoresYoY = calculateYoYChange(
+            sales.filter(s => s.channel === 'negozio_donna' || s.channel === 'negozio_uomo'),
+            dateRange,
+            customStart,
+            customEnd,
+            (s) => s.reduce((sum, sale) => sum + sale.amount, 0)
+          );
           return (
             <MetricCard
               title="Vendite Totali Negozi"
               value={allMetrics.salesByChannel.negozio_donna + allMetrics.salesByChannel.negozio_uomo}
               prefix="€"
-              change={Number(yoy.toFixed(1))}
-              changeType={yoy >= 0 ? 'increase' : 'decrease'}
+              change={totalStoresYoY.change}
+              changeType={totalStoresYoY.changeType}
               description="Variazione vs anno precedente"
             />
           );
         })()}
         {(() => {
-          const months = getMonthlySalesWithYOY(womenStoreSales, 12);
-          const last = months[months.length - 1];
-          const yoy = last && last.previous > 0 ? ((last.current - last.previous) / last.previous) * 100 : 0;
+          const womenYoY = calculateYoYChange(
+            sales.filter(s => s.channel === 'negozio_donna'),
+            dateRange,
+            customStart,
+            customEnd,
+            (s) => s.reduce((sum, sale) => sum + sale.amount, 0)
+          );
           return (
             <MetricCard
               title="Negozio Donna"
               value={allMetrics.salesByChannel.negozio_donna}
               prefix="€"
-              change={Number(yoy.toFixed(1))}
-              changeType={yoy >= 0 ? 'increase' : 'decrease'}
-              badge="YoY"
-              badgeVariant="secondary"
+              change={womenYoY.change}
+              changeType={womenYoY.changeType}
+              description="Variazione vs anno precedente"
             />
           );
         })()}
         {(() => {
-          const months = getMonthlySalesWithYOY(menStoreSales, 12);
-          const last = months[months.length - 1];
-          const yoy = last && last.previous > 0 ? ((last.current - last.previous) / last.previous) * 100 : 0;
+          const menYoY = calculateYoYChange(
+            sales.filter(s => s.channel === 'negozio_uomo'),
+            dateRange,
+            customStart,
+            customEnd,
+            (s) => s.reduce((sum, sale) => sum + sale.amount, 0)
+          );
           return (
             <MetricCard
               title="Negozio Uomo"
               value={allMetrics.salesByChannel.negozio_uomo}
               prefix="€"
-              change={Number(yoy.toFixed(1))}
-              changeType={yoy >= 0 ? 'increase' : 'decrease'}
+              change={menYoY.change}
+              changeType={menYoY.changeType}
+              description="Variazione vs anno precedente"
             />
           );
         })()}
-        <MetricCard
-          title="Margine Medio"
-          value={(womenMetrics.margin + menMetrics.margin) / 2}
-          suffix="%"
-          change={2.1}
-          changeType="increase"
-          description="Sulle vendite fisiche"
-        />
+        {(() => {
+          const avgMarginYoY = calculateYoYChange(
+            sales.filter(s => s.channel === 'negozio_donna' || s.channel === 'negozio_uomo'),
+            dateRange,
+            customStart,
+            customEnd,
+            (s) => {
+              const normalizeSku = (sku?: string) => (sku || '').toString().trim().toUpperCase();
+              const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+              const totalCost = s.reduce((sum, sale) => {
+                const saleSku = normalizeSku((sale as any).sku || sale.productId);
+                if (!saleSku) return sum;
+                const inventoryItem = inventory.find(item => normalizeSku(item.sku) === saleSku);
+                return sum + (inventoryItem ? inventoryItem.purchasePrice * sale.quantity : 0);
+              }, 0);
+              return totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
+            }
+          );
+          return (
+            <MetricCard
+              title="Margine Medio"
+              value={(womenMetrics.margin + menMetrics.margin) / 2}
+              suffix="%"
+              change={avgMarginYoY.change}
+              changeType={avgMarginYoY.changeType}
+              description="Variazione vs anno precedente"
+            />
+          );
+        })()}
       </div>
 
       <Tabs defaultValue="donna" className="space-y-4">
@@ -141,33 +158,100 @@ export function StoresSection({ sales, returns, inventory, dateRange }: StoresSe
 
         <TabsContent value="donna" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Vendite Totali"
-              value={womenMetrics.totalSales}
-              prefix="€"
-              change={12.5}
-              changeType="increase"
-            />
-            <MetricCard
-              title="Resi"
-              value={womenMetrics.totalReturns}
-              prefix="€"
-              change={-3.2}
-              changeType="decrease"
-            />
-            <MetricCard
-              title="Tasso di Reso"
-              value={womenMetrics.returnRate.toFixed(1)}
-              suffix="%"
-              changeType="neutral"
-            />
-            <MetricCard
-              title="Marginalità"
-              value={womenMetrics.margin.toFixed(1)}
-              suffix="%"
-              change={2.8}
-              changeType="increase"
-            />
+            {(() => {
+              const womenSalesYoY = calculateYoYChange(
+                womenStoreSales,
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => s.reduce((sum, sale) => sum + sale.amount, 0)
+              );
+              return (
+                <MetricCard
+                  title="Vendite Totali"
+                  value={womenMetrics.totalSales}
+                  prefix="€"
+                  change={womenSalesYoY.change}
+                  changeType={womenSalesYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const womenReturnsYoY = calculateYoYChange(
+                womenStoreSales,
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'negozio_donna'), dateRange, customStart, customEnd);
+                  return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                }
+              );
+              return (
+                <MetricCard
+                  title="Resi"
+                  value={womenMetrics.totalReturns}
+                  prefix="€"
+                  change={womenReturnsYoY.change}
+                  changeType={womenReturnsYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const womenReturnRateYoY = calculateYoYChange(
+                womenStoreSales,
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'negozio_donna'), dateRange, customStart, customEnd);
+                  const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+                  const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
+                }
+              );
+              return (
+                <MetricCard
+                  title="Tasso di Reso"
+                  value={womenMetrics.returnRate.toFixed(1)}
+                  suffix="%"
+                  change={womenReturnRateYoY.change}
+                  changeType={womenReturnRateYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const womenMarginYoY = calculateYoYChange(
+                womenStoreSales,
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const normalizeSku = (sku?: string) => (sku || '').toString().trim().toUpperCase();
+                  const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+                  const totalCost = s.reduce((sum, sale) => {
+                    const saleSku = normalizeSku((sale as any).sku || sale.productId);
+                    if (!saleSku) return sum;
+                    const inventoryItem = inventory.find(item => normalizeSku(item.sku) === saleSku);
+                    return sum + (inventoryItem ? inventoryItem.purchasePrice * sale.quantity : 0);
+                  }, 0);
+                  return totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
+                }
+              );
+              return (
+                <MetricCard
+                  title="Marginalità"
+                  value={womenMetrics.margin.toFixed(1)}
+                  suffix="%"
+                  change={womenMarginYoY.change}
+                  changeType={womenMarginYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -204,33 +288,100 @@ export function StoresSection({ sales, returns, inventory, dateRange }: StoresSe
 
         <TabsContent value="uomo" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Vendite Totali"
-              value={menMetrics.totalSales}
-              prefix="€"
-              change={-5.3}
-              changeType="decrease"
-            />
-            <MetricCard
-              title="Resi"
-              value={menMetrics.totalReturns}
-              prefix="€"
-              change={15.7}
-              changeType="increase"
-            />
-            <MetricCard
-              title="Tasso di Reso"
-              value={menMetrics.returnRate.toFixed(1)}
-              suffix="%"
-              changeType="increase"
-            />
-            <MetricCard
-              title="Marginalità" 
-              value={menMetrics.margin.toFixed(1)}
-              suffix="%"
-              change={-1.2}
-              changeType="decrease"
-            />
+            {(() => {
+              const menSalesYoY = calculateYoYChange(
+                menStoreSales,
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => s.reduce((sum, sale) => sum + sale.amount, 0)
+              );
+              return (
+                <MetricCard
+                  title="Vendite Totali"
+                  value={menMetrics.totalSales}
+                  prefix="€"
+                  change={menSalesYoY.change}
+                  changeType={menSalesYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const menReturnsYoY = calculateYoYChange(
+                menStoreSales,
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'negozio_uomo'), dateRange, customStart, customEnd);
+                  return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                }
+              );
+              return (
+                <MetricCard
+                  title="Resi"
+                  value={menMetrics.totalReturns}
+                  prefix="€"
+                  change={menReturnsYoY.change}
+                  changeType={menReturnsYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const menReturnRateYoY = calculateYoYChange(
+                menStoreSales,
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'negozio_uomo'), dateRange, customStart, customEnd);
+                  const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+                  const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
+                }
+              );
+              return (
+                <MetricCard
+                  title="Tasso di Reso"
+                  value={menMetrics.returnRate.toFixed(1)}
+                  suffix="%"
+                  change={menReturnRateYoY.change}
+                  changeType={menReturnRateYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const menMarginYoY = calculateYoYChange(
+                menStoreSales,
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const normalizeSku = (sku?: string) => (sku || '').toString().trim().toUpperCase();
+                  const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+                  const totalCost = s.reduce((sum, sale) => {
+                    const saleSku = normalizeSku((sale as any).sku || sale.productId);
+                    if (!saleSku) return sum;
+                    const inventoryItem = inventory.find(item => normalizeSku(item.sku) === saleSku);
+                    return sum + (inventoryItem ? inventoryItem.purchasePrice * sale.quantity : 0);
+                  }, 0);
+                  return totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
+                }
+              );
+              return (
+                <MetricCard
+                  title="Marginalità" 
+                  value={menMetrics.margin.toFixed(1)}
+                  suffix="%"
+                  change={menMarginYoY.change}
+                  changeType={menMarginYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -30,7 +30,8 @@ function convertToSaleFormat(processedSale: ProcessedSaleData): Sale {
     amount: processedSale.amount,
     brand: 'Unknown',
     category: 'abbigliamento',
-    season: 'autunno_inverno'
+    season: 'autunno_inverno',
+    paymentMethod: processedSale.paymentMethod
   };
 }
 

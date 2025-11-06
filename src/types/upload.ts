@@ -14,6 +14,7 @@ export interface ProcessedSaleData {
   quantity: number;
   price: number;
   amount: number;
+  paymentMethod?: string;
 }
 
 export interface UploadResult {

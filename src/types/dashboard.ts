@@ -12,6 +12,7 @@ export interface Sale {
   quantity: number;
   price?: number;
   season: 'primavera_estate' | 'autunno_inverno';
+  paymentMethod?: string;
 }
 
 export interface Return {

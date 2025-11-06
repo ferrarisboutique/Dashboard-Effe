@@ -11,6 +11,10 @@ import { StoresSection } from "./components/StoresSection";
 import { OnlineSection } from "./components/OnlineSection";
 import { InventoryTableSimple } from "./components/InventoryTableSimple";
 import { EmptyState } from "./components/EmptyState";
+import { DateRangeFilter } from "./components/DateRangeFilter";
+import { WarningBar } from "./components/WarningBar";
+import { PaymentMethodMapping } from "./components/PaymentMethodMapping";
+import { AnalyticsSection } from "./components/AnalyticsSection";
 import { ProcessedSaleData } from "./types/upload";
 import { ProcessedInventoryData } from "./types/inventory";
 import { Return } from "./types/dashboard";
@@ -28,15 +32,24 @@ import {
   RefreshCw,
   ShoppingCart,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  CreditCard
 } from "lucide-react";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import { Badge } from "./components/ui/badge";
 
+const API_BASE_URL = import.meta.env.VITE_SUPABASE_FUNCTION_URL || 'https://sbtkymupbjyikfwjeumk.supabase.co/functions/v1/make-server-49468be0';
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNidGt5bXVwYmp5aWtmd2pldW1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MDA0MTUsImV4cCI6MjA3NDQ3NjQxNX0.ONl5r0x89QJKQtP9jttBkvESpV6lDpc1ijydxtP7nzo';
+
 export default function App() {
   const [activeSection, setActiveSection] = useState('overview');
   const [dateRange, setDateRange] = useState('all');
+  const [customStart, setCustomStart] = useState<string | undefined>(undefined);
+  const [customEnd, setCustomEnd] = useState<string | undefined>(undefined);
+  const [paymentMappings, setPaymentMappings] = useState<Record<string, { macroArea: string; channel: string }>>({});
+  const [unmappedPaymentMethods, setUnmappedPaymentMethods] = useState<string[]>([]);
+  const [dismissedWarning, setDismissedWarning] = useState(false);
   
   // Use hooks with autoLoad enabled for production
   const { 
@@ -68,8 +81,47 @@ export default function App() {
     { id: 'upload', label: 'Carica Vendite', icon: Upload },
     { id: 'upload-inventory', label: 'Carica Inventario', icon: Upload },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'payment-mapping', label: 'Mapping Pagamenti', icon: CreditCard },
     { id: 'settings', label: 'Impostazioni', icon: Settings },
   ];
+
+  // Load payment mappings
+  useEffect(() => {
+    loadPaymentMappings();
+  }, []);
+
+  // Check for unmapped payment methods
+  useEffect(() => {
+    if (sales.length > 0) {
+      const uniqueMethods = new Set<string>();
+      sales.forEach(sale => {
+        if (sale.paymentMethod && !paymentMappings[sale.paymentMethod]) {
+          uniqueMethods.add(sale.paymentMethod);
+        }
+      });
+      setUnmappedPaymentMethods(Array.from(uniqueMethods));
+    }
+  }, [sales, paymentMappings]);
+
+  const loadPaymentMappings = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/sales/payment-mappings`, {
+        headers: {
+          'Authorization': `Bearer ${ANON_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.mappings) {
+          setPaymentMappings(data.mappings);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading payment mappings:', error);
+    }
+  };
 
   const handleSectionChange = (sectionId: string) => {
     setActiveSection(sectionId);
@@ -210,6 +262,8 @@ export default function App() {
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}
+            customStart={customStart}
+            customEnd={customEnd}
             totalInventoryCount={totalInventoryCount}
           />
         );
@@ -236,6 +290,8 @@ export default function App() {
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}
+            customStart={customStart}
+            customEnd={customEnd}
           />
         );
       
@@ -261,6 +317,8 @@ export default function App() {
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}
+            customStart={customStart}
+            customEnd={customEnd}
           />
         );
       
@@ -369,23 +427,18 @@ export default function App() {
       
       case 'analytics':
         return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Analytics Avanzate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Sezione in sviluppo. Qui saranno disponibili analisi dettagliate su:
-              </p>
-              <ul className="list-disc list-inside mt-4 space-y-2 text-sm">
-                <li>Analisi predittive delle vendite</li>
-                <li>Segmentazione clienti</li>
-                <li>Performance stagionali</li>
-                <li>Analisi ABC dei prodotti</li>
-                <li>Ottimizzazione scorte</li>
-              </ul>
-            </CardContent>
-          </Card>
+          <AnalyticsSection 
+            sales={sales} 
+            paymentMappings={paymentMappings}
+          />
+        );
+      
+      case 'payment-mapping':
+        return (
+          <PaymentMethodMapping 
+            sales={sales}
+            onMappingChange={loadPaymentMappings}
+          />
         );
       case 'data-quality':
         {
@@ -695,21 +748,14 @@ export default function App() {
                   </div>
                 )}
                 
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  <Select value={dateRange} onValueChange={setDateRange}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tutti i dati</SelectItem>
-                      <SelectItem value="7d">Ultimi 7 giorni</SelectItem>
-                      <SelectItem value="30d">Ultimi 30 giorni</SelectItem>
-                      <SelectItem value="90d">Ultimi 3 mesi</SelectItem>
-                      <SelectItem value="1y">Ultimo anno</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <DateRangeFilter
+                  dateRange={dateRange}
+                  onDateRangeChange={setDateRange}
+                  customStart={customStart}
+                  customEnd={customEnd}
+                  onCustomStartChange={setCustomStart}
+                  onCustomEndChange={setCustomEnd}
+                />
                 
                 <Button 
                   variant="outline" 
@@ -727,6 +773,14 @@ export default function App() {
           {/* Main Content */}
           <main className="flex-1 overflow-auto p-6 bg-muted/50">
             <div className="mx-auto max-w-7xl">
+              {/* Warning Bar for unmapped payment methods */}
+              {unmappedPaymentMethods.length > 0 && !dismissedWarning && (
+                <WarningBar
+                  message={`Ci sono ${unmappedPaymentMethods.length} metodo${unmappedPaymentMethods.length > 1 ? 'i' : ''} di pagamento non mappato${unmappedPaymentMethods.length > 1 ? 'i' : ''}. Configura il mapping nella sezione "Mapping Pagamenti".`}
+                  count={unmappedPaymentMethods.length}
+                  onDismiss={() => setDismissedWarning(true)}
+                />
+              )}
               {renderContent()}
             </div>
           </main>

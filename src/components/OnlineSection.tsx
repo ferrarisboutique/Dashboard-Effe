@@ -4,7 +4,7 @@ import { MetricCard } from "./MetricCard";
 import { SalesChart } from "./SalesChart";
 import { Sale, Return } from "../types/dashboard";
 import { InventoryItem } from "../types/inventory";
-import { calculateMetrics, getSalesByDate, getMarketplaceData, getCategoryData, getBrandData, filterDataByDateRange } from "../utils/analytics";
+import { calculateMetrics, getSalesByDate, getMarketplaceData, getCategoryData, getBrandData, filterDataByDateAdvanced, calculateYoYChange } from "../utils/analytics";
 import { Globe, ShoppingCart, ExternalLink, Package } from "lucide-react";
 import { Badge } from "./ui/badge";
 
@@ -13,12 +13,14 @@ interface OnlineSectionProps {
   returns: Return[];
   inventory: InventoryItem[];
   dateRange: string;
+  customStart?: string;
+  customEnd?: string;
 }
 
-export function OnlineSection({ sales, returns, inventory, dateRange }: OnlineSectionProps) {
+export function OnlineSection({ sales, returns, inventory, dateRange, customStart, customEnd }: OnlineSectionProps) {
   // Apply date filter first
-  const filteredSales = filterDataByDateRange(sales, dateRange);
-  const filteredReturns = filterDataByDateRange(returns, dateRange);
+  const filteredSales = filterDataByDateAdvanced(sales, dateRange, customStart, customEnd);
+  const filteredReturns = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
   
   const allMetrics = calculateMetrics(filteredSales, filteredReturns, inventory);
   
@@ -115,33 +117,100 @@ export function OnlineSection({ sales, returns, inventory, dateRange }: OnlineSe
 
         <TabsContent value="ecommerce" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Fatturato E-commerce"
-              value={ecommerceMetrics.totalSales}
-              prefix="€"
-              change={18.3}
-              changeType="increase"
-            />
-            <MetricCard
-              title="Resi E-commerce"
-              value={ecommerceMetrics.totalReturns}
-              prefix="€"
-              change={-8.5}
-              changeType="decrease"
-            />
-            <MetricCard
-              title="Tasso di Reso"
-              value={ecommerceMetrics.returnRate.toFixed(1)}
-              suffix="%"
-              changeType="decrease"
-            />
-            <MetricCard
-              title="Marginalità"
-              value={ecommerceMetrics.margin.toFixed(1)}
-              suffix="%"
-              change={3.2}
-              changeType="increase"
-            />
+            {(() => {
+              const ecommerceSalesYoY = calculateYoYChange(
+                sales.filter(s => s.channel === 'ecommerce'),
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => s.reduce((sum, sale) => sum + sale.amount, 0)
+              );
+              return (
+                <MetricCard
+                  title="Fatturato E-commerce"
+                  value={ecommerceMetrics.totalSales}
+                  prefix="€"
+                  change={ecommerceSalesYoY.change}
+                  changeType={ecommerceSalesYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const ecommerceReturnsYoY = calculateYoYChange(
+                sales.filter(s => s.channel === 'ecommerce'),
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'ecommerce'), dateRange, customStart, customEnd);
+                  return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                }
+              );
+              return (
+                <MetricCard
+                  title="Resi E-commerce"
+                  value={ecommerceMetrics.totalReturns}
+                  prefix="€"
+                  change={ecommerceReturnsYoY.change}
+                  changeType={ecommerceReturnsYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const ecommerceReturnRateYoY = calculateYoYChange(
+                sales.filter(s => s.channel === 'ecommerce'),
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'ecommerce'), dateRange, customStart, customEnd);
+                  const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+                  const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
+                }
+              );
+              return (
+                <MetricCard
+                  title="Tasso di Reso"
+                  value={ecommerceMetrics.returnRate.toFixed(1)}
+                  suffix="%"
+                  change={ecommerceReturnRateYoY.change}
+                  changeType={ecommerceReturnRateYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const ecommerceMarginYoY = calculateYoYChange(
+                sales.filter(s => s.channel === 'ecommerce'),
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const normalizeSku = (sku?: string) => (sku || '').toString().trim().toUpperCase();
+                  const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+                  const totalCost = s.reduce((sum, sale) => {
+                    const saleSku = normalizeSku((sale as any).sku || sale.productId);
+                    if (!saleSku) return sum;
+                    const inventoryItem = inventory.find(item => normalizeSku(item.sku) === saleSku);
+                    return sum + (inventoryItem ? inventoryItem.purchasePrice * sale.quantity : 0);
+                  }, 0);
+                  return totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
+                }
+              );
+              return (
+                <MetricCard
+                  title="Marginalità"
+                  value={ecommerceMetrics.margin.toFixed(1)}
+                  suffix="%"
+                  change={ecommerceMarginYoY.change}
+                  changeType={ecommerceMarginYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -163,33 +232,100 @@ export function OnlineSection({ sales, returns, inventory, dateRange }: OnlineSe
 
         <TabsContent value="marketplace" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard
-              title="Fatturato Marketplace"
-              value={marketplaceMetrics.totalSales}
-              prefix="€"
-              change={12.1}
-              changeType="increase"
-            />
-            <MetricCard
-              title="Resi Marketplace"
-              value={marketplaceMetrics.totalReturns}
-              prefix="€"
-              change={22.3}
-              changeType="increase"
-            />
-            <MetricCard
-              title="Tasso di Reso"
-              value={marketplaceMetrics.returnRate.toFixed(1)}
-              suffix="%"
-              changeType="increase"
-            />
-            <MetricCard
-              title="Marginalità"
-              value={marketplaceMetrics.margin.toFixed(1)}
-              suffix="%"
-              change={-0.8}
-              changeType="decrease"
-            />
+            {(() => {
+              const marketplaceSalesYoY = calculateYoYChange(
+                sales.filter(s => s.channel === 'marketplace'),
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => s.reduce((sum, sale) => sum + sale.amount, 0)
+              );
+              return (
+                <MetricCard
+                  title="Fatturato Marketplace"
+                  value={marketplaceMetrics.totalSales}
+                  prefix="€"
+                  change={marketplaceSalesYoY.change}
+                  changeType={marketplaceSalesYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const marketplaceReturnsYoY = calculateYoYChange(
+                sales.filter(s => s.channel === 'marketplace'),
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'marketplace'), dateRange, customStart, customEnd);
+                  return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                }
+              );
+              return (
+                <MetricCard
+                  title="Resi Marketplace"
+                  value={marketplaceMetrics.totalReturns}
+                  prefix="€"
+                  change={marketplaceReturnsYoY.change}
+                  changeType={marketplaceReturnsYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const marketplaceReturnRateYoY = calculateYoYChange(
+                sales.filter(s => s.channel === 'marketplace'),
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'marketplace'), dateRange, customStart, customEnd);
+                  const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+                  const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
+                }
+              );
+              return (
+                <MetricCard
+                  title="Tasso di Reso"
+                  value={marketplaceMetrics.returnRate.toFixed(1)}
+                  suffix="%"
+                  change={marketplaceReturnRateYoY.change}
+                  changeType={marketplaceReturnRateYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
+            {(() => {
+              const marketplaceMarginYoY = calculateYoYChange(
+                sales.filter(s => s.channel === 'marketplace'),
+                dateRange,
+                customStart,
+                customEnd,
+                (s) => {
+                  const normalizeSku = (sku?: string) => (sku || '').toString().trim().toUpperCase();
+                  const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+                  const totalCost = s.reduce((sum, sale) => {
+                    const saleSku = normalizeSku((sale as any).sku || sale.productId);
+                    if (!saleSku) return sum;
+                    const inventoryItem = inventory.find(item => normalizeSku(item.sku) === saleSku);
+                    return sum + (inventoryItem ? inventoryItem.purchasePrice * sale.quantity : 0);
+                  }, 0);
+                  return totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
+                }
+              );
+              return (
+                <MetricCard
+                  title="Marginalità"
+                  value={marketplaceMetrics.margin.toFixed(1)}
+                  suffix="%"
+                  change={marketplaceMarginYoY.change}
+                  changeType={marketplaceMarginYoY.changeType}
+                  description="Variazione vs anno precedente"
+                />
+              );
+            })()}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
