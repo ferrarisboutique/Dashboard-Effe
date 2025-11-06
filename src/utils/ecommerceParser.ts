@@ -444,7 +444,8 @@ export async function parseEcommerceFile(
         totalRows: 0,
         validSalesRows: 0,
         validReturnsRows: 0,
-        skippedDuplicates: 0
+        skippedDuplicates: 0,
+        duplicates: undefined
       };
     }
     
