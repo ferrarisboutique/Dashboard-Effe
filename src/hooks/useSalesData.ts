@@ -90,7 +90,9 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
           country: item.country,
           orderReference: item.orderReference,
           shippingCost: item.shippingCost,
-          taxRate: item.taxRate
+          taxRate: item.taxRate,
+          documento: item.documento,
+          numero: item.numero
         }));
         
         setSales(salesData);
