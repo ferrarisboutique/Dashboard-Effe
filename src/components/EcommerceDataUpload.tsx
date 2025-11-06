@@ -248,7 +248,7 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                                     </TableCell>
                                     <TableCell>{dup.documento}</TableCell>
                                     <TableCell>{dup.numero}</TableCell>
-                                    <TableCell>{new Date(dup.date).toLocaleDateString('it-IT'))}</TableCell>
+                                    <TableCell>{new Date(dup.date).toLocaleDateString('it-IT')}</TableCell>
                                     <TableCell>{dup.sku}</TableCell>
                                     <TableCell>{dup.quantity}</TableCell>
                                     <TableCell>€{dup.price.toFixed(2)}</TableCell>
