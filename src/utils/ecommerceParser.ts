@@ -1,7 +1,7 @@
 import { EcommerceUploadRow, ProcessedEcommerceSaleData, ProcessedReturnData, EcommerceUploadResult } from '../types/upload';
 import { parseCSV, parseExcel } from './fileParser';
 
-// Helper: parse number with comma as decimal separator
+// Helper: parse number with comma as decimal separator (Italian format)
 function parseNumber(input: any, fieldLabel: string, rowNumber: number): number | null {
   if (typeof input === 'number') return input;
   if (input === undefined || input === null || input === '') return null;
@@ -12,19 +12,25 @@ function parseNumber(input: any, fieldLabel: string, rowNumber: number): number 
   // Remove currency symbols and spaces
   s = s.replace(/€/g, '').replace(/\s/g, '');
   
-  // Handle comma as decimal separator
+  // Handle Italian number format (comma as decimal separator)
   if (s.includes('.') && s.includes(',')) {
-    // Both present: . is thousands, , is decimal
+    // Both present: . is thousands separator, , is decimal separator
+    // Example: 1.234,56 -> 1234.56
     s = s.replace(/\./g, '').replace(/,/g, '.');
   } else if (s.includes(',')) {
-    // Only comma: could be decimal or thousands
-    // If more than 3 digits after comma, it's thousands separator
+    // Only comma: check if it's decimal or thousands separator
     const parts = s.split(',');
-    if (parts.length === 2 && parts[1].length <= 2) {
-      // Decimal separator
-      s = s.replace(/,/g, '.');
+    if (parts.length === 2) {
+      // Two parts: check if second part has 1-2 digits (decimal) or more (thousands)
+      if (parts[1].length <= 2 && parts[1].length > 0) {
+        // Decimal separator (e.g., "120,00" or "120,5")
+        s = s.replace(/,/g, '.');
+      } else {
+        // Thousands separator (e.g., "1,234")
+        s = s.replace(/,/g, '');
+      }
     } else {
-      // Thousands separator
+      // Multiple commas: thousands separator
       s = s.replace(/,/g, '');
     }
   }
