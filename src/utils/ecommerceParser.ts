@@ -240,8 +240,13 @@ export function validateAndProcessEcommerceData(
           continue;
         }
         
-        // Extract price
-        const priceField = row['Prezzo articc'] || row['Item Amount'] || row['Prezzo articc'];
+        // Extract price (try multiple possible field names)
+        const priceField = row['Prezzo articc'] || 
+                          row['Prezzo articc'] || 
+                          row['Item Amount'] || 
+                          row['Prezzo'] ||
+                          row['Price'] ||
+                          row['Prezzo unitario'];
         const priceParsed = parseNumber(priceField, 'Prezzo', rowNumber);
         if (priceParsed === null || priceParsed <= 0) {
           errors.push(`Riga ${rowNumber} (${documento} ${numero}): Prezzo non valido`);
