@@ -26,9 +26,12 @@ const getAllInventoryItems = async (): Promise<any[]> => {
     if (count > 1000) {
       const allData: any[] = [];
       const pageSize = 1000;
-      let currentPage = 0;
+      const totalPages = Math.ceil(count / pageSize);
+      // Removed hard limit - now loads all pages based on actual count
+      // Increased safety limit to 500 pages (500k items) to prevent infinite loops
+      const maxPages = 500;
       
-      while (currentPage * pageSize < count) {
+      for (let currentPage = 0; currentPage < Math.min(totalPages, maxPages); currentPage++) {
         const from = currentPage * pageSize;
         const to = from + pageSize - 1;
         
@@ -46,11 +49,17 @@ const getAllInventoryItems = async (): Promise<any[]> => {
           allData.push(...pageData.map((d) => ({ key: d.key, value: d.value })));
         }
         
-        currentPage++;
-        
-        if (currentPage > 100) {
-          break;
+        // Log progress for large inventories
+        if (currentPage % 10 === 0 && totalPages > 10) {
+          console.log(`Loading inventory: page ${currentPage + 1}/${totalPages} (${allData.length} items loaded so far)`);
         }
+      }
+      
+      console.log(`Loaded ${allData.length} inventory items out of ${count} total`);
+      
+      // Warn if we hit the limit
+      if (totalPages >= maxPages) {
+        console.warn(`Warning: Inventory has ${count} items (${totalPages} pages), but only loaded first ${maxPages} pages (${allData.length} items)`);
       }
       
       return allData;
@@ -371,13 +380,34 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
 
     // GET /inventory/count
     if (path === '/inventory/count' && method === 'GET') {
+      // Get count directly from database for accuracy (faster than loading all items)
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL"),
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+      );
+      
+      const { count, error: countError } = await supabase
+        .from("kv_store_49468be0")
+        .select("*", { count: 'exact', head: true })
+        .like("key", "inventory_%");
+      
+      if (countError) {
+        throw new Error(countError.message);
+      }
+      
+      const actualCount = count || 0;
+      
+      // Also verify by loading items to check for discrepancies
       const allInventoryItems = await getAllInventoryItems();
-      const count = allInventoryItems.length;
+      const loadedCount = allInventoryItems.length;
       
       return jsonResponse({
         success: true,
-        count,
-        message: `Total inventory items: ${count}`
+        count: actualCount,
+        loadedCount: loadedCount,
+        databaseCount: actualCount,
+        discrepancy: actualCount !== loadedCount ? actualCount - loadedCount : 0,
+        message: `Total inventory items: ${actualCount}${actualCount !== loadedCount ? ` (loaded: ${loadedCount}, discrepancy: ${actualCount - loadedCount})` : ''}`
       });
     }
 
