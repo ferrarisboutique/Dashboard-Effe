@@ -187,5 +187,3 @@ app.get("/health", async (c) => { ... });
 
 L'applicazione è generalmente ben strutturata, ma presenta alcuni problemi di sicurezza e configurazione che dovrebbero essere risolti prima del deployment in produzione. I problemi più critici riguardano l'esposizione di chiavi API e la configurazione delle route delle edge functions.
 
-
-

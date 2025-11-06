@@ -17,6 +17,11 @@ interface SaleData {
   category?: string;
   season?: string;
   paymentMethod?: string;
+  area?: 'Ferraris' | 'Zuklat';
+  country?: string;
+  orderReference?: string;
+  shippingCost?: number;
+  taxRate?: number;
 }
 
 // Helper: fetch all sales with pagination to bypass 1000 row limit
@@ -179,6 +184,11 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
             season: value.season || 'autunno_inverno',
             marketplace: value.marketplace,
             paymentMethod: value.paymentMethod,
+            area: value.area,
+            country: value.country,
+            orderReference: value.orderReference,
+            shippingCost: value.shippingCost,
+            taxRate: value.taxRate,
             purchasePrice: undefined
           } as SaleData;
         }
@@ -214,6 +224,11 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
             season: value.season || 'autunno_inverno',
             marketplace: value.marketplace,
             paymentMethod: value.paymentMethod,
+            area: value.area,
+            country: value.country,
+            orderReference: value.orderReference,
+            shippingCost: value.shippingCost,
+            taxRate: value.taxRate,
             purchasePrice
           } as SaleData;
       });
@@ -446,7 +461,12 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
           category: sale.category || 'abbigliamento',
           season: sale.season || 'autunno_inverno',
           marketplace: sale.marketplace,
-          paymentMethod: paymentMethod
+          paymentMethod: paymentMethod,
+          area: sale.area,
+          country: sale.country,
+          orderReference: sale.orderReference,
+          shippingCost: sale.shippingCost,
+          taxRate: sale.taxRate
         };
         processedCount++;
       }
@@ -476,6 +496,138 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
         brandsFromInventory,
         mappingsApplied
       });
+    }
+
+    // POST /sales/returns/bulk
+    if (path === '/sales/returns/bulk' && method === 'POST') {
+      const requestBody = await req.json();
+      const { returns } = requestBody;
+      
+      if (!returns) {
+        return jsonResponse({ success: false, error: 'No returns data provided' }, 400);
+      }
+      
+      if (!Array.isArray(returns)) {
+        return jsonResponse({ success: false, error: 'Returns data must be an array' }, 400);
+      }
+
+      // Get existing returns to check for duplicates
+      const existingReturnsData = await getAllReturnsItems();
+      
+      const userKey = (u?: string) => (u || '').toString().trim().toLowerCase();
+      const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
+      
+      // Create a Set of unique return signatures
+      const existingReturnSignatures = new Set(
+        existingReturnsData.map((r: any) => {
+          const ret = r.value || r;
+          return `${ret.date}_${ret.orderReference || ret.sku}_${ret.quantity}_${ret.amount}`;
+        })
+      );
+
+      const returnsToSave: Record<string, any> = {};
+      const timestamp = Date.now();
+      let skippedDuplicates = 0;
+      let processedCount = 0;
+      
+      for (let index = 0; index < returns.length; index++) {
+        const ret = returns[index];
+        const returnSignature = `${ret.date}_${ret.orderReference || ret.sku}_${ret.quantity}_${ret.amount}`;
+        
+        if (existingReturnSignatures.has(returnSignature)) {
+          skippedDuplicates++;
+          continue;
+        }
+        
+        existingReturnSignatures.add(returnSignature);
+        
+        // Ensure amount is negative
+        const amount = ret.amount < 0 ? ret.amount : -Math.abs(ret.amount);
+        
+        const returnId = `return_${timestamp}_${index}`;
+        returnsToSave[returnId] = {
+          id: returnId,
+          saleId: ret.orderReference || `unknown_${returnId}`, // Use orderReference as saleId reference
+          date: ret.date,
+          amount: amount,
+          reason: ret.reason || 'Reso ecommerce',
+          channel: ret.channel || 'ecommerce',
+          marketplace: ret.paymentMethod || undefined,
+          area: ret.area,
+          country: ret.country,
+          orderReference: ret.orderReference,
+          returnShippingCost: ret.returnShippingCost,
+          taxRate: ret.taxRate
+        };
+        processedCount++;
+      }
+
+      const keys = Object.keys(returnsToSave);
+      
+      if (keys.length > 0) {
+        await kv.mset(returnsToSave);
+      }
+      
+      let message = `${processedCount} resi caricati con successo`;
+      if (skippedDuplicates > 0) {
+        message += ` (${skippedDuplicates} resi duplicate ignorati)`;
+      }
+      
+      return jsonResponse({ 
+        success: true, 
+        message,
+        savedCount: processedCount,
+        skippedDuplicates
+      });
+    }
+
+    // Helper: get all returns items
+    async function getAllReturnsItems(): Promise<Array<{ key: string; value: any }>> {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL"),
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+      );
+
+      const { count, error: countError } = await supabase
+        .from("kv_store_49468be0")
+        .select("*", { count: 'exact', head: true })
+        .like("key", "return_%");
+
+      if (countError) {
+        throw new Error(countError.message);
+      }
+
+      if (!count || count === 0) return [];
+
+      if (count <= 1000) {
+        const { data, error } = await supabase
+          .from("kv_store_49468be0")
+          .select("key, value")
+          .like("key", "return_%")
+          .limit(count);
+        if (error) throw new Error(error.message);
+        return data?.map(d => ({ key: d.key, value: d.value })) ?? [];
+      }
+
+      const pageSize = 1000;
+      const pages = Math.ceil(count / pageSize);
+      const all: Array<{ key: string; value: any }> = [];
+
+      for (let i = 0; i < pages; i++) {
+        const from = i * pageSize;
+        const to = from + pageSize - 1;
+        const { data, error } = await supabase
+          .from("kv_store_49468be0")
+          .select("key, value")
+          .like("key", "return_%")
+          .range(from, to);
+        if (error) throw new Error(error.message);
+        if (data) {
+          all.push(...data.map(d => ({ key: d.key, value: d.value })));
+        }
+      }
+
+      return all;
     }
 
     // DELETE /sales/all
@@ -536,7 +688,12 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
         ...saleData,
         id: saleId,
         brand: brand,
-        paymentMethod: saleData.paymentMethod
+        paymentMethod: saleData.paymentMethod,
+        area: saleData.area,
+        country: saleData.country,
+        orderReference: saleData.orderReference,
+        shippingCost: saleData.shippingCost,
+        taxRate: saleData.taxRate
       };
       
       await kv.set(saleId, sale);

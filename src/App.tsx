@@ -15,7 +15,9 @@ import { DateRangeFilter } from "./components/DateRangeFilter";
 import { WarningBar } from "./components/WarningBar";
 import { PaymentMethodMapping } from "./components/PaymentMethodMapping";
 import { AnalyticsSection } from "./components/AnalyticsSection";
-import { ProcessedSaleData } from "./types/upload";
+import { EcommerceDataUpload } from "./components/EcommerceDataUpload";
+import { OSSSection } from "./components/OSSSection";
+import { ProcessedSaleData, ProcessedEcommerceSaleData, ProcessedReturnData } from "./types/upload";
 import { ProcessedInventoryData } from "./types/inventory";
 import { Return } from "./types/dashboard";
 import { useSalesData } from "./hooks/useSalesData";
@@ -56,7 +58,8 @@ export default function App() {
     sales, 
     loading: salesLoading, 
     error: salesError, 
-    uploadSales, 
+    uploadSales,
+    uploadReturns,
     refreshSales,
     clearSales
   } = useSalesData(true);
@@ -79,8 +82,10 @@ export default function App() {
     { id: 'inventory', label: 'Inventario', icon: Package },
     { id: 'data-quality', label: 'Qualità Dati', icon: AlertCircle },
     { id: 'upload', label: 'Carica Vendite', icon: Upload },
+    { id: 'upload-ecommerce', label: 'Carica Ecommerce', icon: Upload },
     { id: 'upload-inventory', label: 'Carica Inventario', icon: Upload },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'oss', label: 'OSS', icon: BarChart3 },
     { id: 'payment-mapping', label: 'Mapping Pagamenti', icon: CreditCard },
     { id: 'settings', label: 'Impostazioni', icon: Settings },
   ];
@@ -141,6 +146,36 @@ export default function App() {
         captureError(error, { context: 'handleSalesUploaded' });
       }
       toast.error('Errore nel caricamento dei dati di vendita');
+    }
+  };
+
+  const handleEcommerceSalesUploaded = async (
+    data: ProcessedEcommerceSaleData[],
+    onProgress?: (progress: number) => void
+  ): Promise<boolean> => {
+    try {
+      return await uploadSales(data, onProgress);
+    } catch (error) {
+      if (error instanceof Error) {
+        captureError(error, { context: 'handleEcommerceSalesUploaded' });
+      }
+      toast.error('Errore nel caricamento delle vendite ecommerce');
+      return false;
+    }
+  };
+
+  const handleEcommerceReturnsUploaded = async (
+    data: ProcessedReturnData[],
+    onProgress?: (progress: number) => void
+  ): Promise<boolean> => {
+    try {
+      return await uploadReturns(data, onProgress);
+    } catch (error) {
+      if (error instanceof Error) {
+        captureError(error, { context: 'handleEcommerceReturnsUploaded' });
+      }
+      toast.error('Errore nel caricamento dei resi ecommerce');
+      return false;
     }
   };
 
@@ -430,6 +465,23 @@ export default function App() {
           <AnalyticsSection 
             sales={sales} 
             paymentMappings={paymentMappings}
+          />
+        );
+      
+      case 'upload-ecommerce':
+        return (
+          <EcommerceDataUpload
+            onSalesUploaded={handleEcommerceSalesUploaded}
+            onReturnsUploaded={handleEcommerceReturnsUploaded}
+            paymentMappings={paymentMappings}
+          />
+        );
+      
+      case 'oss':
+        return (
+          <OSSSection
+            sales={sales}
+            returns={returns}
           />
         );
       

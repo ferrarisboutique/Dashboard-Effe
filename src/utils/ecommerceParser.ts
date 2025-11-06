@@ -1,0 +1,402 @@
+import { EcommerceUploadRow, ProcessedEcommerceSaleData, ProcessedReturnData, EcommerceUploadResult } from '../types/upload';
+import { parseCSV, parseExcel } from './fileParser';
+
+// Helper: parse number with comma as decimal separator
+function parseNumber(input: any, fieldLabel: string, rowNumber: number): number | null {
+  if (typeof input === 'number') return input;
+  if (input === undefined || input === null || input === '') return null;
+  
+  let s = String(input).trim();
+  if (!s) return null;
+  
+  // Remove currency symbols and spaces
+  s = s.replace(/€/g, '').replace(/\s/g, '');
+  
+  // Handle comma as decimal separator
+  if (s.includes('.') && s.includes(',')) {
+    // Both present: . is thousands, , is decimal
+    s = s.replace(/\./g, '').replace(/,/g, '.');
+  } else if (s.includes(',')) {
+    // Only comma: could be decimal or thousands
+    // If more than 3 digits after comma, it's thousands separator
+    const parts = s.split(',');
+    if (parts.length === 2 && parts[1].length <= 2) {
+      // Decimal separator
+      s = s.replace(/,/g, '.');
+    } else {
+      // Thousands separator
+      s = s.replace(/,/g, '');
+    }
+  }
+  
+  const n = Number(s);
+  if (Number.isNaN(n)) {
+    return null;
+  }
+  return n;
+}
+
+// Helper: parse date DD/MM/YY or DD/MM/YYYY
+function parseDate(dateValue: any, rowNumber: number): string | null {
+  if (!dateValue) return null;
+  
+  let dateString: string;
+  
+  if (typeof dateValue === 'number') {
+    // Excel serial date
+    const excelDate = new Date((dateValue - 25569) * 86400 * 1000);
+    return excelDate.toISOString();
+  } else if (dateValue instanceof Date) {
+    return dateValue.toISOString();
+  } else {
+    dateString = dateValue.toString().trim();
+  }
+  
+  // Format: DD/MM/YY or DD/MM/YYYY
+  const dateRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/;
+  const match = dateString.match(dateRegex);
+  
+  if (!match) {
+    throw new Error(`Formato data non valido: ${dateString}. Usa DD/MM/YY o DD/MM/YYYY`);
+  }
+  
+  let day = parseInt(match[1]);
+  let month = parseInt(match[2]);
+  let year = parseInt(match[3]);
+  
+  // Convert 2-digit year to 4-digit
+  if (year < 100) {
+    year = year <= 30 ? 2000 + year : 1900 + year;
+  }
+  
+  // Validate
+  if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1900 || year > 2100) {
+    throw new Error(`Data non valida: ${dateString}`);
+  }
+  
+  const parsedDate = new Date(year, month - 1, day);
+  if (parsedDate.getFullYear() !== year || 
+      parsedDate.getMonth() !== month - 1 || 
+      parsedDate.getDate() !== day) {
+    throw new Error(`Data non esistente: ${dateString}`);
+  }
+  
+  return parsedDate.toISOString();
+}
+
+// Helper: identify if row is a return
+function isReturn(documento: string | undefined): boolean {
+  if (!documento) return false;
+  const doc = documento.toUpperCase().trim();
+  return doc === 'RESO' || doc === 'NOTA CRED' || doc === 'NOTA DI CREDITO';
+}
+
+// Helper: extract area from supplier/platform or area field
+function extractArea(supplierPlatform: string | undefined, area: string | undefined): 'Ferraris' | 'Zuklat' | undefined {
+  const value = (supplierPlatform || area || '').toString().trim();
+  if (value === 'Ferraris') return 'Ferraris';
+  if (value === 'Zuklat') return 'Zuklat';
+  return undefined;
+}
+
+// Helper: determine channel from payment method and supplier/platform
+function determineChannel(
+  paymentMethod: string | undefined,
+  supplierPlatform: string | undefined,
+  paymentMappings?: Record<string, { macroArea: string; channel: string }>
+): 'ecommerce' | 'marketplace' {
+  // Check payment method mapping first
+  if (paymentMethod && paymentMappings?.[paymentMethod]) {
+    const mapping = paymentMappings[paymentMethod];
+    if (mapping.channel === 'ecommerce' || mapping.channel === 'marketplace') {
+      return mapping.channel;
+    }
+  }
+  
+  // Check supplier/platform for known marketplaces
+  const platform = (supplierPlatform || '').toString().toLowerCase();
+  const knownMarketplaces = ['zalando', 'cettire', 'baltini', 'yoox', 'guhada', 'thelist', 'miinto'];
+  if (knownMarketplaces.some(m => platform.includes(m))) {
+    return 'marketplace';
+  }
+  
+  // Default to ecommerce
+  return 'ecommerce';
+}
+
+// Helper: group rows by transaction (Documento + Numero + Data)
+function groupByTransaction(rows: EcommerceUploadRow[]): Map<string, EcommerceUploadRow[]> {
+  const groups = new Map<string, EcommerceUploadRow[]>();
+  
+  for (const row of rows) {
+    const documento = row.Documento || '';
+    const numero = row.Numero || '';
+    const data = row.Data || '';
+    const key = `${documento}_${numero}_${data}`;
+    
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key)!.push(row);
+  }
+  
+  return groups;
+}
+
+// Helper: create unique key for sale
+function createSaleUniqueKey(documento: string, numero: string, data: string, sku: string, qty: number, price: number): string {
+  return `${documento}_${numero}_${data}_${sku}_${qty}_${price}`;
+}
+
+// Helper: create unique key for return
+function createReturnUniqueKey(documento: string, numero: string, data: string, orderReference: string, sku: string, qty: number, price: number): string {
+  return `${documento}_${numero}_${data}_${orderReference}_${sku}_${qty}_${price}`;
+}
+
+// Main parser function
+export function validateAndProcessEcommerceData(
+  rawData: any[],
+  paymentMappings?: Record<string, { macroArea: string; channel: string }>
+): EcommerceUploadResult {
+  const errors: string[] = [];
+  const processedSales: ProcessedEcommerceSaleData[] = [];
+  const processedReturns: ProcessedReturnData[] = [];
+  const seenKeys = new Set<string>();
+  let skippedDuplicates = 0;
+  
+  const totalRows = rawData.length;
+  
+  // Group by transaction to handle shipping costs
+  const transactionGroups = groupByTransaction(rawData as EcommerceUploadRow[]);
+  
+  // Process each transaction group
+  for (const [transactionKey, rows] of transactionGroups.entries()) {
+    if (rows.length === 0) continue;
+    
+    const firstRow = rows[0];
+    const documento = (firstRow.Documento || '').toString().trim();
+    const numero = (firstRow.Numero || '').toString().trim();
+    
+    // Parse date from first row
+    let date: string | null = null;
+    try {
+      date = parseDate(firstRow.Data, 0);
+      if (!date) {
+        errors.push(`Transazione ${documento} ${numero}: Data mancante o non valida`);
+        continue;
+      }
+    } catch (error) {
+      errors.push(`Transazione ${documento} ${numero}: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+    
+    const isReturnDoc = isReturn(documento);
+    
+    // Extract common fields
+    const country = (firstRow.Nazione || firstRow['Nazione'] || '').toString().trim().toUpperCase();
+    const supplierPlatform = (firstRow['Supplier/Platform'] || '').toString().trim();
+    const areaField = (firstRow.Area || '').toString().trim();
+    const area = extractArea(supplierPlatform, areaField);
+    
+    // Extract payment method
+    const paymentMethod = (firstRow['Metodo paga'] || '').toString().trim();
+    
+    // Determine channel
+    const channel = determineChannel(paymentMethod, supplierPlatform, paymentMappings);
+    
+    // Extract shipping cost (only for sales, once per transaction)
+    let shippingCost: number | undefined = undefined;
+    if (!isReturnDoc && firstRow['Spese traspc']) {
+      const shipping = parseNumber(firstRow['Spese traspc'], 'Spese traspc', 0);
+      if (shipping !== null && shipping > 0) {
+        shippingCost = shipping;
+      }
+    }
+    
+    // Process each row in the transaction
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      const row = rows[rowIndex];
+      const rowNumber = rowIndex + 2; // +2 for header and 0-based index
+      
+      try {
+        // Extract SKU (try multiple field names)
+        const sku = (row.SKU || row['SKU'] || '').toString().trim();
+        if (!sku && !isReturnDoc) {
+          errors.push(`Riga ${rowNumber} (${documento} ${numero}): SKU mancante`);
+          continue;
+        }
+        
+        // Extract quantity
+        const qty = row.Qty || row['Qty'] || row['Quant.'] || 0;
+        const quantity = typeof qty === 'number' ? qty : parseNumber(qty, 'Quantità', rowNumber) || 0;
+        if (quantity <= 0) {
+          errors.push(`Riga ${rowNumber} (${documento} ${numero}): Quantità non valida`);
+          continue;
+        }
+        
+        // Extract price
+        const priceField = row['Prezzo articc'] || row['Item Amount'] || row['Prezzo articc'];
+        const priceParsed = parseNumber(priceField, 'Prezzo', rowNumber);
+        if (priceParsed === null || priceParsed <= 0) {
+          errors.push(`Riga ${rowNumber} (${documento} ${numero}): Prezzo non valido`);
+          continue;
+        }
+        const price = priceParsed;
+        
+        // Calculate amount (negative for returns)
+        let amount = quantity * price;
+        if (isReturnDoc) {
+          amount = -Math.abs(amount); // Ensure negative
+        }
+        
+        // Add shipping cost only to first row of sales transaction
+        if (!isReturnDoc && shippingCost && rowIndex === 0) {
+          amount += shippingCost;
+        }
+        
+        // Extract tax rate
+        const taxRateField = row['Aliquota per'] || row['Tax Rate'];
+        const taxRate = taxRateField ? (typeof taxRateField === 'number' ? taxRateField : parseNumber(taxRateField, 'Aliquota', rowNumber)) : undefined;
+        
+        // Extract order reference (for returns)
+        const orderReference = (row['Order/Reference Number'] || '').toString().trim();
+        
+        // Create unique key
+        const uniqueKey = isReturnDoc
+          ? createReturnUniqueKey(documento, numero, date, orderReference || sku, sku || (row['Item Description'] || '').toString(), quantity, price)
+          : createSaleUniqueKey(documento, numero, date, sku, quantity, price);
+        
+        // Check for duplicates
+        if (seenKeys.has(uniqueKey)) {
+          skippedDuplicates++;
+          continue;
+        }
+        seenKeys.add(uniqueKey);
+        
+        // Handle "Spese di reso" as separate return line
+        const itemDescription = (row['Item Description'] || row.Articolo || '').toString().trim();
+        if (isReturnDoc && itemDescription.toLowerCase().includes('spese di reso')) {
+          // This is a return shipping cost line
+          const returnShipping = parseNumber(priceField, 'Spese di reso', rowNumber);
+          if (returnShipping !== null) {
+            processedReturns.push({
+              date,
+              country,
+              area,
+              channel,
+              sku: undefined, // No SKU for shipping costs
+              quantity: 1,
+              price: -Math.abs(returnShipping),
+              amount: -Math.abs(returnShipping),
+              paymentMethod,
+              orderReference,
+              returnShippingCost: -Math.abs(returnShipping),
+              taxRate,
+              reason: documento
+            });
+          }
+          continue;
+        }
+        
+        // Create processed data
+        if (isReturnDoc) {
+          processedReturns.push({
+            date,
+            country,
+            area,
+            channel,
+            sku: sku || undefined,
+            quantity,
+            price: -Math.abs(price), // Ensure negative
+            amount,
+            paymentMethod,
+            orderReference,
+            taxRate,
+            reason: documento
+          });
+        } else {
+          processedSales.push({
+            date,
+            user: 'ecommerce', // Default user for ecommerce
+            channel,
+            sku,
+            quantity,
+            price,
+            amount,
+            paymentMethod: paymentMethod || undefined,
+            area,
+            country: country || undefined,
+            orderReference: orderReference || undefined,
+            shippingCost: rowIndex === 0 ? shippingCost : undefined, // Only first row
+            taxRate
+          });
+        }
+        
+      } catch (error) {
+        errors.push(`Riga ${rowNumber} (${documento} ${numero}): ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+  
+  return {
+    success: errors.length === 0,
+    sales: processedSales,
+    returns: processedReturns,
+    errors: errors.length > 0 ? errors : undefined,
+    totalRows,
+    validSalesRows: processedSales.length,
+    validReturnsRows: processedReturns.length,
+    skippedDuplicates
+  };
+}
+
+// Main file parser
+export async function parseEcommerceFile(
+  file: File,
+  paymentMappings?: Record<string, { macroArea: string; channel: string }>
+): Promise<EcommerceUploadResult> {
+  try {
+    let rawData: any[];
+    
+    if (file.name.toLowerCase().endsWith('.csv')) {
+      const text = await file.text();
+      // Use existing CSV parser
+      rawData = await parseCSV(text);
+    } else if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+      // Use existing Excel parser
+      rawData = await parseExcel(file);
+    } else {
+      return {
+        success: false,
+        errors: ['Formato file non supportato. Usa CSV o XLSX.'],
+        totalRows: 0,
+        validSalesRows: 0,
+        validReturnsRows: 0,
+        skippedDuplicates: 0
+      };
+    }
+    
+    if (rawData.length === 0) {
+      return {
+        success: false,
+        errors: ['Il file è vuoto o non contiene dati validi.'],
+        totalRows: 0,
+        validSalesRows: 0,
+        validReturnsRows: 0,
+        skippedDuplicates: 0
+      };
+    }
+    
+    return validateAndProcessEcommerceData(rawData, paymentMappings);
+  } catch (error) {
+    return {
+      success: false,
+      errors: [`Errore nel processing del file: ${error}`],
+      totalRows: 0,
+      validSalesRows: 0,
+      validReturnsRows: 0,
+      skippedDuplicates: 0
+    };
+  }
+}
+

@@ -82,3 +82,5 @@
 - Serve solo il deploy manuale su Supabase
 - Dopo il deploy, le vendite avranno brand corretto automaticamente
 
+
+

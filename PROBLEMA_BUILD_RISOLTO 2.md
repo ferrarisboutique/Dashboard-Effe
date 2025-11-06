@@ -110,5 +110,3 @@ Le correzioni applicate sono corrette e necessarie:
 
 Il problema del blocco locale potrebbe essere specifico dell'ambiente di sviluppo. Il deploy su Vercel dovrebbe risolvere il problema dato che l'ambiente di produzione è generalmente più stabile.
 
-
-

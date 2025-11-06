@@ -85,5 +85,3 @@ Dopo il deploy, verificare:
 4. Verifica che i console.log non appaiano in produzione
 5. Verifica headers di sicurezza nelle response HTTP
 
-
-

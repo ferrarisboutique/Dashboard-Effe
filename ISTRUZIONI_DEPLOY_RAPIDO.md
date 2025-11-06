@@ -83,3 +83,5 @@ Dopo entrambi gli step:
 - L'endpoint di aggiornamento funzionerà solo DOPO il deploy
 - Le vendite future avranno automaticamente il brand corretto
 
+
+

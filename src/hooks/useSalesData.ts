@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Sale } from '../types/dashboard';
-import { ProcessedSaleData } from '../types/upload';
+import { ProcessedSaleData, ProcessedReturnData } from '../types/upload';
 import { API_BASE_URL, publicAnonKey } from '../utils/supabase/info';
 import { toast } from 'sonner';
 
@@ -9,6 +9,7 @@ export interface UseSalesDataReturn {
   loading: boolean;
   error: string | null;
   uploadSales: (salesData: ProcessedSaleData[], onProgress?: (progress: number) => void) => Promise<boolean>;
+  uploadReturns: (returnsData: ProcessedReturnData[], onProgress?: (progress: number) => void) => Promise<boolean>;
   refreshSales: () => Promise<void>;
   clearSales: () => Promise<boolean>;
   fetchOrphans: () => Promise<any[]>;
@@ -31,7 +32,12 @@ function convertToSaleFormat(processedSale: ProcessedSaleData): Sale {
     brand: 'Unknown',
     category: 'abbigliamento',
     season: 'autunno_inverno',
-    paymentMethod: processedSale.paymentMethod
+    paymentMethod: processedSale.paymentMethod,
+    area: processedSale.area,
+    country: processedSale.country,
+    orderReference: processedSale.orderReference,
+    shippingCost: processedSale.shippingCost,
+    taxRate: processedSale.taxRate
   };
 }
 
@@ -75,7 +81,13 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
           productId: item.productId || item.sku,
           quantity: item.quantity,
           season: item.season || 'autunno_inverno',
-          marketplace: item.marketplace
+          marketplace: item.marketplace,
+          paymentMethod: item.paymentMethod,
+          area: item.area,
+          country: item.country,
+          orderReference: item.orderReference,
+          shippingCost: item.shippingCost,
+          taxRate: item.taxRate
         }));
         
         setSales(salesData);
@@ -193,6 +205,107 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
     }
   }, [fetchSales]);
 
+  const uploadReturns = useCallback(async (
+    returnsData: ProcessedReturnData[],
+    onProgress?: (progress: number) => void
+  ): Promise<boolean> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // For large datasets, use chunked upload
+      const CHUNK_SIZE = 500;
+      const totalChunks = Math.ceil(returnsData.length / CHUNK_SIZE);
+
+      if (totalChunks > 1) {
+        toast.info(`Caricamento di ${returnsData.length} resi in ${totalChunks} blocchi...`);
+      }
+
+      let totalSaved = 0;
+      let totalDuplicates = 0;
+
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const start = chunkIndex * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, returnsData.length);
+        const chunk = returnsData.slice(start, end);
+
+        // Update progress
+        if (onProgress) {
+          const progress = ((chunkIndex + 1) / totalChunks) * 100;
+          onProgress(Math.min(progress, 99));
+        }
+
+        const requestBody = { returns: chunk };
+
+        // Add timeout for large uploads (2 minutes per chunk)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/sales/returns/bulk`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${publicAnonKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to upload chunk ${chunkIndex + 1}/${totalChunks}: ${response.status} ${response.statusText}. Details: ${errorText}`);
+          }
+
+          const result = await response.json();
+
+          if (result.success) {
+            totalSaved += (result.savedCount || chunk.length);
+            totalDuplicates += (result.skippedDuplicates || 0);
+          } else {
+            throw new Error(result.error || `Failed to upload chunk ${chunkIndex + 1}/${totalChunks}`);
+          }
+        } catch (chunkError) {
+          clearTimeout(timeoutId);
+          if (chunkError instanceof Error && chunkError.name === 'AbortError') {
+            throw new Error(`Timeout durante l'upload del blocco ${chunkIndex + 1}/${totalChunks}. Il file è troppo grande o la connessione è lenta.`);
+          }
+          throw chunkError;
+        }
+
+        // Show progress toast for multi-chunk uploads
+        if (totalChunks > 1 && chunkIndex < totalChunks - 1) {
+          toast.info(`Blocco ${chunkIndex + 1}/${totalChunks} completato...`);
+        }
+      }
+
+      // Final success message
+      let message = `${totalSaved} resi caricati con successo!`;
+      if (totalDuplicates > 0) {
+        toast.warning(`${message}\n⚠️ ${totalDuplicates} resi duplicate sono stati ignorati.`);
+      } else {
+        toast.success(message);
+      }
+
+      // Refresh sales data
+      await fetchSales();
+
+      if (onProgress) {
+        onProgress(100);
+      }
+
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+      toast.error(`Errore nel caricamento dei resi: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchSales]);
+
   const refreshSales = useCallback(async () => {
     await fetchSales();
   }, [fetchSales]);
@@ -268,6 +381,7 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
     loading,
     error,
     uploadSales,
+    uploadReturns,
     refreshSales,
     clearSales,
     fetchOrphans: async () => {

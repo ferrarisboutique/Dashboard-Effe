@@ -114,3 +114,5 @@ Oppure aggiungi un pulsante nell'interfaccia "Qualità Dati" per chiamare questo
 - Priorità: Inventario > Mapping salvati > Unknown
 - Le vendite esistenti possono essere aggiornate con l'endpoint dedicato
 
+
+

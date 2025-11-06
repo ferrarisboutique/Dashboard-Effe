@@ -13,6 +13,11 @@ export interface Sale {
   price?: number;
   season: 'primavera_estate' | 'autunno_inverno';
   paymentMethod?: string;
+  area?: 'Ferraris' | 'Zuklat';
+  country?: string;
+  orderReference?: string;
+  shippingCost?: number;
+  taxRate?: number;
 }
 
 export interface Return {
@@ -23,6 +28,11 @@ export interface Return {
   reason: string;
   channel: 'negozio_donna' | 'negozio_uomo' | 'ecommerce' | 'marketplace';
   marketplace?: string;
+  area?: 'Ferraris' | 'Zuklat';
+  country?: string;
+  orderReference?: string;
+  returnShippingCost?: number;
+  taxRate?: number;
 }
 
 // InventoryItem definition moved to types/inventory.ts to avoid conflicts

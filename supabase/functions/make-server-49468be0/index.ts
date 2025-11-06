@@ -1,59 +1,110 @@
-import { Hono } from "npm:hono";
-import { cors } from "npm:hono/cors";
-import { logger } from "npm:hono/logger";
-import * as kv from "./kv_store.ts";
-import salesRoutes from "./sales.ts";
-import { inventory } from "./inventory.ts";
+// Supabase Edge Function - Native Deno (no Hono)
+import { handleSalesRoutes } from './sales.ts';
+import { handleInventoryRoutes } from './inventory.ts';
 
-const app = new Hono();
+// CORS headers helper
+function corsHeaders(): HeadersInit {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '600',
+  };
+}
 
-// Disable logger to prevent timeout
-// app.use('*', logger(console.log));
+// JSON response helper
+function jsonResponse(data: any, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...corsHeaders(),
+    },
+  });
+}
 
-// Enable CORS for all routes and methods
-app.use(
-  "/*",
-  cors({
-    origin: "*",
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-  }),
-);
-
-// Health check endpoint
-// Note: Supabase automatically adds /functions/v1/make-server-49468be0 prefix
-app.get("/health", async (c) => {
+// Main request handler
+Deno.serve(async (req: Request) => {
   try {
-    // Simple health check - test database connectivity
-    // Note: kv.get() might fail if key doesn't exist, which is OK for health check
-    try {
-      await kv.get('health_check_test_key');
-    } catch {
-      // Key doesn't exist is fine - just testing connectivity
+    const url = new URL(req.url);
+    let path = url.pathname;
+    const method = req.method;
+
+    // Handle OPTIONS (CORS preflight)
+    if (method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders(),
+      });
     }
-    return c.json({ 
-      status: "ok", 
-      timestamp: new Date().toISOString(),
-      message: "Server and database are healthy" 
-    });
+
+    // Supabase includes the function name in the path: /make-server-49468be0/health
+    // We need to remove the function name prefix
+    let cleanPath = path;
+    
+    // Remove function name prefix if present
+    if (cleanPath.startsWith('/make-server-49468be0')) {
+      cleanPath = cleanPath.replace('/make-server-49468be0', '');
+    }
+    
+    // Handle empty path (root)
+    if (!cleanPath || cleanPath === '') {
+      cleanPath = '/';
+    }
+    
+    // Ensure it starts with /
+    if (!cleanPath.startsWith('/')) {
+      cleanPath = '/' + cleanPath;
+    }
+
+    // Root endpoint
+    if (cleanPath === '/' || cleanPath === '') {
+      return jsonResponse({
+        status: 'ok',
+        message: 'Edge Function is running',
+        endpoints: {
+          health: '/health',
+          sales: '/sales',
+          inventory: '/inventory',
+        },
+      });
+    }
+
+    // Health check endpoint
+    if (cleanPath === '/health' && method === 'GET') {
+      const hasUrl = !!Deno.env.get('SUPABASE_URL');
+      const hasKey = !!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+      return jsonResponse({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        message: 'Server is healthy',
+        env: {
+          hasSupabaseUrl: hasUrl,
+          hasServiceRoleKey: hasKey,
+        },
+      });
+    }
+
+    // Route to sales handlers
+    if (cleanPath.startsWith('/sales')) {
+      return handleSalesRoutes(req, cleanPath, method);
+    }
+
+    // Route to inventory handlers
+    if (cleanPath.startsWith('/inventory')) {
+      return handleInventoryRoutes(req, cleanPath, method);
+    }
+
+    // 404 for unknown routes
+    return jsonResponse({ error: 'Not found' }, 404);
   } catch (error) {
-    console.error('Health check failed:', error);
-    return c.json({ 
-      status: "error", 
-      timestamp: new Date().toISOString(),
-      message: "Database connectivity issue",
-      error: error instanceof Error ? error.message : String(error)
-    }, 500);
+    console.error('Request error:', error);
+    return jsonResponse(
+      {
+        error: error instanceof Error ? error.message : String(error),
+      },
+      500
+    );
   }
 });
-
-// Mount sales routes
-// Note: Routes are mounted at root since Supabase adds the function name prefix
-app.route("/", salesRoutes);
-
-// Mount inventory routes  
-app.route("/", inventory);
-
-Deno.serve(app.fetch);

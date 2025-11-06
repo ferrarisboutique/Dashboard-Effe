@@ -60,3 +60,5 @@ Dopo deploy e aggiornamento:
 - Messaggio upload mostra "X brand attribuiti dall'inventario"
 - Statistiche per brand corrette
 
+
+

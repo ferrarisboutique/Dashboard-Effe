@@ -442,3 +442,169 @@ export function getBrandChannelDistribution(
 
   return { macroAreas, subChannels };
 }
+
+// Get sales by country
+export function getSalesByCountry(sales: Sale[]) {
+  const grouped = sales.reduce((acc, sale) => {
+    const country = sale.country || 'Unknown';
+    acc[country] = (acc[country] || 0) + sale.amount;
+    return acc;
+  }, {} as Record<string, number>);
+
+  return Object.entries(grouped)
+    .map(([country, value]) => ({ country, amount: value }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+// Get brand distribution by country
+export function getBrandByCountry(sales: Sale[]) {
+  const countryBrandMap = new Map<string, Record<string, number>>();
+
+  sales.forEach(sale => {
+    if (!sale.country || !sale.brand || sale.brand === 'Unknown') return;
+    
+    if (!countryBrandMap.has(sale.country)) {
+      countryBrandMap.set(sale.country, {});
+    }
+    
+    const brandMap = countryBrandMap.get(sale.country)!;
+    brandMap[sale.brand] = (brandMap[sale.brand] || 0) + sale.amount;
+  });
+
+  const result: Array<{ country: string; brands: Array<{ brand: string; amount: number; percentage: number }> }> = [];
+
+  for (const [country, brandMap] of countryBrandMap.entries()) {
+    const total = Object.values(brandMap).reduce((sum, val) => sum + val, 0);
+    const brands = Object.entries(brandMap)
+      .map(([brand, amount]) => ({
+        brand,
+        amount,
+        percentage: total > 0 ? (amount / total) * 100 : 0
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    result.push({ country, brands });
+  }
+
+  return result.sort((a, b) => a.country.localeCompare(b.country));
+}
+
+// Get return rate by country
+export function getReturnRateByCountry(sales: Sale[], returns: Return[]) {
+  const salesByCountry = sales.reduce((acc, sale) => {
+    const country = sale.country || 'Unknown';
+    acc[country] = (acc[country] || 0) + sale.amount;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const returnsByCountry = returns.reduce((acc, ret) => {
+    const country = ret.country || 'Unknown';
+    acc[country] = (acc[country] || 0) + Math.abs(ret.amount); // Returns are negative
+    return acc;
+  }, {} as Record<string, number>);
+
+  const result = Object.keys({ ...salesByCountry, ...returnsByCountry }).map(country => {
+    const salesAmount = salesByCountry[country] || 0;
+    const returnsAmount = returnsByCountry[country] || 0;
+    const returnRate = salesAmount > 0 ? (returnsAmount / salesAmount) * 100 : 0;
+
+    return {
+      country,
+      salesAmount,
+      returnsAmount,
+      returnRate
+    };
+  });
+
+  return result.sort((a, b) => b.salesAmount - a.salesAmount);
+}
+
+// Get country rankings
+export function getCountryRankings(sales: Sale[], returns: Return[]) {
+  const salesByCountry = getSalesByCountry(sales);
+  const returnRates = getReturnRateByCountry(sales, returns);
+
+  const topSales = salesByCountry.slice(0, 10);
+  const bestReturnRate = [...returnRates]
+    .filter(r => r.salesAmount > 0)
+    .sort((a, b) => a.returnRate - b.returnRate)
+    .slice(0, 10);
+  const worstReturnRate = [...returnRates]
+    .filter(r => r.salesAmount > 0)
+    .sort((a, b) => b.returnRate - a.returnRate)
+    .slice(0, 10);
+
+  return {
+    topSales,
+    bestReturnRate,
+    worstReturnRate
+  };
+}
+
+// Get channel distribution by country
+export function getChannelByCountry(sales: Sale[]) {
+  const countryChannelMap = new Map<string, Record<string, number>>();
+
+  sales.forEach(sale => {
+    if (!sale.country) return;
+    
+    if (!countryChannelMap.has(sale.country)) {
+      countryChannelMap.set(sale.country, {});
+    }
+    
+    const channelMap = countryChannelMap.get(sale.country)!;
+    const channel = sale.channel;
+    channelMap[channel] = (channelMap[channel] || 0) + sale.amount;
+  });
+
+  const result: Array<{ country: string; channels: Array<{ channel: string; amount: number; percentage: number }> }> = [];
+
+  for (const [country, channelMap] of countryChannelMap.entries()) {
+    const total = Object.values(channelMap).reduce((sum, val) => sum + val, 0);
+    const channels = Object.entries(channelMap)
+      .map(([channel, amount]) => ({
+        channel,
+        amount,
+        percentage: total > 0 ? (amount / total) * 100 : 0
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    result.push({ country, channels });
+  }
+
+  return result.sort((a, b) => a.country.localeCompare(b.country));
+}
+
+// Get area distribution by country
+export function getAreaByCountry(sales: Sale[]) {
+  const countryAreaMap = new Map<string, Record<string, number>>();
+
+  sales.forEach(sale => {
+    if (!sale.country || !sale.area) return;
+    
+    if (!countryAreaMap.has(sale.country)) {
+      countryAreaMap.set(sale.country, {});
+    }
+    
+    const areaMap = countryAreaMap.get(sale.country)!;
+    const area = sale.area;
+    areaMap[area] = (areaMap[area] || 0) + sale.amount;
+  });
+
+  const result: Array<{ country: string; areas: Array<{ area: string; amount: number; percentage: number }> }> = [];
+
+  for (const [country, areaMap] of countryAreaMap.entries()) {
+    const total = Object.values(areaMap).reduce((sum, val) => sum + val, 0);
+    const areas = Object.entries(areaMap)
+      .map(([area, amount]) => ({
+        area,
+        amount,
+        percentage: total > 0 ? (amount / total) * 100 : 0
+      }))
+      .sort((a, b) => b.amount - a.amount);
+
+    result.push({ country, areas });
+  }
+
+  return result.sort((a, b) => a.country.localeCompare(b.country));
+}

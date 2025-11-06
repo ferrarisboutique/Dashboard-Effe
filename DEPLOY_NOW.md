@@ -50,3 +50,5 @@ Dopo il deploy e l'aggiornamento:
 - ✅ Le statistiche per brand saranno accurate
 - ✅ Nuove vendite avranno brand automatico dall'inventario
 
+
+

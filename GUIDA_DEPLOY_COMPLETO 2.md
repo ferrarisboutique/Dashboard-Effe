@@ -251,5 +251,3 @@ Se riscontri problemi:
 3. Verifica la console del browser per errori client-side
 4. Consulta `ANALISI_BUG_E_ERRORI.md` per dettagli tecnici
 
-
-

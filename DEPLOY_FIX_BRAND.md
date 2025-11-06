@@ -63,3 +63,5 @@ Se l'endpoint non funziona:
 - Controlla i log della funzione su Supabase Dashboard
 - Verifica che l'inventario contenga i prodotti con brand
 
+
+
