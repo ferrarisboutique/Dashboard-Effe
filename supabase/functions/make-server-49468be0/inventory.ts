@@ -2,6 +2,62 @@
 import * as kv from './kv_store.ts';
 import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
 
+// Efficient function to get only existing SKUs (for duplicate checking)
+const getExistingSKUs = async (): Promise<Set<string>> => {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL"),
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  );
+  
+  const existingSKUs = new Set<string>();
+  
+  try {
+    const { count, error: countError } = await supabase
+      .from("kv_store_49468be0")
+      .select("*", { count: 'exact', head: true })
+      .like("key", "inventory_%");
+    
+    if (countError || !count || count === 0) {
+      return existingSKUs;
+    }
+    
+    const pageSize = 1000;
+    const totalPages = Math.ceil(count / pageSize);
+    const maxPages = 500; // Safety limit
+    
+    for (let currentPage = 0; currentPage < Math.min(totalPages, maxPages); currentPage++) {
+      const from = currentPage * pageSize;
+      const to = from + pageSize - 1;
+      
+      const { data: pageData, error } = await supabase
+        .from("kv_store_49468be0")
+        .select("value")
+        .like("key", "inventory_%")
+        .range(from, to);
+      
+      if (error) {
+        console.warn(`Error loading page ${currentPage}: ${error.message}`);
+        continue;
+      }
+      
+      if (pageData) {
+        pageData.forEach((row: any) => {
+          const v = row.value || {};
+          const sku = v.sku;
+          if (sku) {
+            existingSKUs.add(sku.toString().trim().toUpperCase());
+          }
+        });
+      }
+    }
+    
+    return existingSKUs;
+  } catch (error) {
+    console.error(`Error getting existing SKUs: ${error}`);
+    return existingSKUs;
+  }
+};
+
 // Custom function to get all inventory items with pagination to bypass 1000 row limit
 const getAllInventoryItems = async (): Promise<any[]> => {
   const supabase = createClient(
@@ -242,20 +298,16 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
       try {
         const timestamp = new Date().toISOString();
         
-        // Optimize: Only check for duplicates within the current chunk, not all existing items
-        // This is much faster for large inventories (40k+ items)
-        // We'll check duplicates within the chunk itself and let the database handle conflicts
-        const chunkSKUs = new Set<string>();
-        const chunkSKUCounts = new Map<string, number>();
+        // Get existing SKUs efficiently (only SKU strings, not full items)
+        console.log('Loading existing SKUs for duplicate check...');
+        const existingSKUs = await getExistingSKUs();
+        console.log(`Found ${existingSKUs.size} existing SKUs in database`);
         
-        // Count SKUs in current chunk to detect duplicates within chunk
-        for (const item of inventoryData) {
-          if (item.sku) {
-            chunkSKUCounts.set(item.sku, (chunkSKUCounts.get(item.sku) || 0) + 1);
-          }
-        }
+        // Also check for duplicates within the current chunk
+        const chunkSKUs = new Set<string>();
         
         let skippedDuplicates = 0;
+        let skippedExisting = 0;
         let processedCount = 0;
         let skippedInvalid = 0;
         
@@ -272,13 +324,21 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
             continue;
           }
           
+          const skuNormalized = item.sku.toString().trim().toUpperCase();
+          
           // Check for duplicates within the current chunk
-          if (chunkSKUs.has(item.sku)) {
+          if (chunkSKUs.has(skuNormalized)) {
             skippedDuplicates++;
             continue;
           }
           
-          chunkSKUs.add(item.sku);
+          // Check if SKU already exists in database
+          if (existingSKUs.has(skuNormalized)) {
+            skippedExisting++;
+            continue;
+          }
+          
+          chunkSKUs.add(skuNormalized);
           
           const generatedId = `${item.sku}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           const key = `inventory_${generatedId}`;
@@ -342,6 +402,9 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
         if (skippedDuplicates > 0) {
           message += ` (${skippedDuplicates} SKU duplicati nel chunk ignorati)`;
         }
+        if (skippedExisting > 0) {
+          message += ` (${skippedExisting} SKU già esistenti nel database ignorati)`;
+        }
         if (skippedInvalid > 0) {
           message += ` (${skippedInvalid} item senza SKU o brand ignorati)`;
         }
@@ -351,6 +414,7 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
           message,
           count: processedCount,
           skippedDuplicates,
+          skippedExisting,
           skippedInvalid,
           chunk,
           totalChunks,
@@ -448,6 +512,109 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
           deletedCount: 0,
           totalItems: 0
         });
+      }
+    }
+
+    // POST /inventory/remove-duplicates
+    if (path === '/inventory/remove-duplicates' && method === 'POST') {
+      const startTime = Date.now();
+      
+      try {
+        console.log('Starting duplicate removal process...');
+        const allInventoryItems = await getAllInventoryItems();
+        console.log(`Loaded ${allInventoryItems.length} items for duplicate check`);
+        
+        // Group items by SKU (normalized)
+        const skuGroups = new Map<string, Array<{ key: string; item: any; createdAt?: string }>>();
+        
+        for (const item of allInventoryItems) {
+          const v = item.value || {};
+          const sku = v.sku;
+          if (!sku) continue;
+          
+          const skuNormalized = sku.toString().trim().toUpperCase();
+          
+          if (!skuGroups.has(skuNormalized)) {
+            skuGroups.set(skuNormalized, []);
+          }
+          
+          skuGroups.get(skuNormalized)!.push({
+            key: item.key,
+            item: v,
+            createdAt: v.createdAt || item.key // Use key as fallback for sorting
+          });
+        }
+        
+        // Find duplicates (SKUs with more than 1 item)
+        const duplicatesToRemove: string[] = [];
+        let totalDuplicates = 0;
+        let uniqueSKUs = 0;
+        
+        for (const [sku, items] of skuGroups.entries()) {
+          if (items.length > 1) {
+            // Sort by createdAt (newest first), keep the first one
+            items.sort((a, b) => {
+              const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+              const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+              return dateB - dateA; // Newest first
+            });
+            
+            // Keep the first (newest), mark others for deletion
+            for (let i = 1; i < items.length; i++) {
+              duplicatesToRemove.push(items[i].key);
+              totalDuplicates++;
+            }
+          } else {
+            uniqueSKUs++;
+          }
+        }
+        
+        console.log(`Found ${totalDuplicates} duplicate items to remove (${skuGroups.size - uniqueSKUs} SKUs with duplicates)`);
+        
+        // Delete duplicates in batches
+        let deletedCount = 0;
+        const BATCH_SIZE = 100;
+        
+        for (let i = 0; i < duplicatesToRemove.length; i += BATCH_SIZE) {
+          const batch = duplicatesToRemove.slice(i, i + BATCH_SIZE);
+          
+          try {
+            await kv.mdel(batch);
+            deletedCount += batch.length;
+            console.log(`Deleted batch ${Math.floor(i / BATCH_SIZE) + 1}: ${deletedCount}/${duplicatesToRemove.length}`);
+          } catch (batchError) {
+            console.error(`Error deleting batch: ${batchError}`);
+            // Continue with other batches
+          }
+          
+          // Small delay to avoid overwhelming the database
+          if (i + BATCH_SIZE < duplicatesToRemove.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+        
+        const processingTime = Date.now() - startTime;
+        
+        return jsonResponse({
+          success: true,
+          message: `Rimossi ${deletedCount} item duplicati`,
+          deletedCount,
+          totalDuplicates,
+          uniqueSKUs,
+          skusWithDuplicates: skuGroups.size - uniqueSKUs,
+          processingTime
+        });
+        
+      } catch (error) {
+        const errorDetails = error instanceof Error ? error.message : String(error);
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Failed to remove duplicates',
+            details: errorDetails
+          },
+          500
+        );
       }
     }
 
