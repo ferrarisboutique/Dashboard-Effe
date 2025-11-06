@@ -3,14 +3,28 @@ import { parseCSV, parseExcel } from './fileParser';
 
 // Helper: parse number with comma as decimal separator (Italian format)
 function parseNumber(input: any, fieldLabel: string, rowNumber: number): number | null {
-  if (typeof input === 'number') return input;
-  if (input === undefined || input === null || input === '') return null;
+  if (typeof input === 'number') {
+    // Already a number, return as is
+    return input;
+  }
+  
+  if (input === undefined || input === null) {
+    return null;
+  }
   
   let s = String(input).trim();
-  if (!s) return null;
+  if (!s || s === '' || s === 'null' || s === 'undefined') {
+    return null;
+  }
   
   // Remove currency symbols and spaces
-  s = s.replace(/€/g, '').replace(/\s/g, '');
+  s = s.replace(/€/g, '').replace(/\s/g, '').replace(/[^\d.,-]/g, '');
+  
+  // Handle negative numbers
+  const isNegative = s.startsWith('-');
+  if (isNegative) {
+    s = s.substring(1);
+  }
   
   // Handle Italian number format (comma as decimal separator)
   if (s.includes('.') && s.includes(',')) {
@@ -25,21 +39,36 @@ function parseNumber(input: any, fieldLabel: string, rowNumber: number): number 
       if (parts[1].length <= 2 && parts[1].length > 0) {
         // Decimal separator (e.g., "120,00" or "120,5")
         s = s.replace(/,/g, '.');
+      } else if (parts[1].length === 0) {
+        // Just comma at the end, treat as decimal separator (e.g., "120," -> "120")
+        s = parts[0];
       } else {
         // Thousands separator (e.g., "1,234")
         s = s.replace(/,/g, '');
       }
-    } else {
+    } else if (parts.length > 2) {
       // Multiple commas: thousands separator
       s = s.replace(/,/g, '');
+    } else {
+      // Single comma, likely decimal separator
+      s = s.replace(/,/g, '.');
     }
+  }
+  
+  // Final cleanup: remove any remaining non-numeric characters except decimal point
+  s = s.replace(/[^\d.]/g, '');
+  
+  // Handle empty string after cleanup
+  if (!s || s === '') {
+    return null;
   }
   
   const n = Number(s);
   if (Number.isNaN(n)) {
     return null;
   }
-  return n;
+  
+  return isNegative ? -n : n;
 }
 
 // Helper: parse date DD/MM/YY or DD/MM/YYYY
@@ -241,15 +270,33 @@ export function validateAndProcessEcommerceData(
         }
         
         // Extract price (try multiple possible field names)
+        // Try all possible column name variations
         const priceField = row['Prezzo articc'] || 
                           row['Prezzo articc'] || 
                           row['Item Amount'] || 
+                          row['ItemAmount'] ||
                           row['Prezzo'] ||
                           row['Price'] ||
-                          row['Prezzo unitario'];
+                          row['Prezzo unitario'] ||
+                          row['PrezzoUnitario'] ||
+                          row['Prezzo Articc'] ||
+                          row['PREZZO ARTICC'] ||
+                          row['Prezzo Articolo'] ||
+                          // Try to find any field containing "prezzo" or "price" (case insensitive)
+                          Object.keys(row).find(key => 
+                            key.toLowerCase().includes('prezzo') || 
+                            key.toLowerCase().includes('price')
+                          ) ? row[Object.keys(row).find(key => 
+                            key.toLowerCase().includes('prezzo') || 
+                            key.toLowerCase().includes('price')
+                          )!] : undefined;
+        
+        // Debug: log the field value if parsing fails
         const priceParsed = parseNumber(priceField, 'Prezzo', rowNumber);
         if (priceParsed === null || priceParsed <= 0) {
-          errors.push(`Riga ${rowNumber} (${documento} ${numero}): Prezzo non valido`);
+          const fieldValue = priceField !== undefined ? `"${priceField}"` : 'campo non trovato';
+          const availableFields = Object.keys(row).join(', ');
+          errors.push(`Riga ${rowNumber} (${documento} ${numero}): Prezzo non valido. Valore: ${fieldValue}. Campi disponibili: ${availableFields}`);
           continue;
         }
         const price = priceParsed;
