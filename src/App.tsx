@@ -130,7 +130,8 @@ export default function App() {
 
   // Helper to determine if we have data
   const hasSalesData = sales.length > 0;
-  const hasInventoryData = inventory.length > 0;
+  // Use pagination.total to check if inventory exists in database, not just current filtered results
+  const hasInventoryData = (pagination.total || 0) > 0;
   const hasAnyData = hasSalesData || hasInventoryData;
 
   // Get total counts (use pagination.total for inventory to get real count)
@@ -315,6 +316,7 @@ export default function App() {
               loading={inventoryLoading}
               pagination={pagination}
               filters={filters}
+              error={inventoryError}
               onRefresh={refreshInventory}
             />
           </div>

@@ -28,6 +28,7 @@ interface InventoryTableSimpleProps {
   loading: boolean;
   pagination: PaginationInfo;
   filters: FilterInfo;
+  error?: string | null;
   onRefresh: (params?: {
     page?: number;
     limit?: number;
@@ -42,6 +43,7 @@ export function InventoryTableSimple({
   loading, 
   pagination, 
   filters, 
+  error,
   onRefresh 
 }: InventoryTableSimpleProps) {
   const [searchTerm, setSearchTerm] = useState('');
@@ -171,7 +173,7 @@ export function InventoryTableSimple({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tutti i brand</SelectItem>
-              {filters.brands.map(brand => (
+              {(filters?.brands || []).map(brand => (
                 <SelectItem key={brand} value={brand}>{brand}</SelectItem>
               ))}
             </SelectContent>
@@ -184,7 +186,7 @@ export function InventoryTableSimple({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tutte</SelectItem>
-              {filters.categories.map(category => (
+              {(filters?.categories || []).map(category => (
                 <SelectItem key={category} value={category}>{category}</SelectItem>
               ))}
               <SelectItem value="empty">Senza categoria</SelectItem>
@@ -219,6 +221,30 @@ export function InventoryTableSimple({
       </CardHeader>
       
       <CardContent>
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <div className="text-red-600 font-semibold">⚠️ Errore</div>
+            </div>
+            <p className="text-red-700 mt-1 text-sm">{error}</p>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="mt-2"
+              onClick={() => {
+                setSearchTerm('');
+                setBrandFilter('all');
+                setCategoryFilter('all');
+                setCurrentPage(1);
+                onRefresh({ page: 1, limit: 50 });
+              }}
+            >
+              Riprova
+            </Button>
+          </div>
+        )}
+        
         {/* Table */}
         <div className="rounded-md border">
           <Table>
