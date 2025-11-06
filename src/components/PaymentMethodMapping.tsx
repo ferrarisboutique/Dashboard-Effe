@@ -171,29 +171,30 @@ export function PaymentMethodMapping({ sales, onMappingChange }: PaymentMethodMa
               <div className="space-y-2">
                 {Object.entries(mappings).map(([method, mapping]) => (
                   <div key={method} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline">{method}</Badge>
-                    <Select
-                      value={mapping.macroArea}
-                      onValueChange={(v: 'Marketplace' | 'Sito' | 'Altro') => updateMapping(method, v)}
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline">{method}</Badge>
+                      <Select
+                        value={mapping.macroArea}
+                        onValueChange={(v: 'Marketplace' | 'Sito' | 'Altro') => updateMapping(method, v)}
+                      >
+                        <SelectTrigger className="w-[150px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Marketplace">Marketplace</SelectItem>
+                          <SelectItem value="Sito">Sito</SelectItem>
+                          <SelectItem value="Altro">Altro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeMapping(method)}
                     >
-                      <SelectTrigger className="w-[150px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Marketplace">Marketplace</SelectItem>
-                        <SelectItem value="Sito">Sito</SelectItem>
-                        <SelectItem value="Altro">Altro</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeMapping(method)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
                 ))}
               </div>
             )}
