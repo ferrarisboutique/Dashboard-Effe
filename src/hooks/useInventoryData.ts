@@ -104,10 +104,49 @@ export function useInventoryData(autoLoad: boolean = true) {
         throw new Error(`Errore ${response.status}: ${errorText}`);
       }
 
-      const data = await response.json();
-      setInventory(data.inventory || []);
-      if (data.pagination) setPagination(data.pagination);
-      if (data.filters) setFilters(data.filters);
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        const text = await response.text();
+        throw new Error(`Errore nel parsing della risposta JSON: ${text.substring(0, 200)}`);
+      }
+      
+      // Validate response structure
+      if (!data || typeof data !== 'object') {
+        throw new Error('Risposta del server non valida: formato dati non riconosciuto');
+      }
+      
+      // Log in development for debugging
+      if (import.meta.env.DEV) {
+        console.log('Inventory response:', {
+          hasInventory: Array.isArray(data.inventory),
+          inventoryLength: Array.isArray(data.inventory) ? data.inventory.length : 0,
+          hasPagination: !!data.pagination,
+          hasFilters: !!data.filters,
+          total: data.pagination?.total || 0
+        });
+      }
+      
+      setInventory(Array.isArray(data.inventory) ? data.inventory : []);
+      
+      if (data.pagination && typeof data.pagination === 'object') {
+        setPagination({
+          page: data.pagination.page || 1,
+          limit: data.pagination.limit || 50,
+          total: data.pagination.total || 0,
+          totalPages: data.pagination.totalPages || 0,
+          hasNext: data.pagination.hasNext || false,
+          hasPrev: data.pagination.hasPrev || false
+        });
+      }
+      
+      if (data.filters && typeof data.filters === 'object') {
+        setFilters({
+          brands: Array.isArray(data.filters.brands) ? data.filters.brands : [],
+          categories: Array.isArray(data.filters.categories) ? data.filters.categories : []
+        });
+      }
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
