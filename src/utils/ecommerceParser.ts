@@ -197,6 +197,7 @@ export function validateAndProcessEcommerceData(
   const processedSales: ProcessedEcommerceSaleData[] = [];
   const processedReturns: ProcessedReturnData[] = [];
   const seenKeys = new Set<string>();
+  const duplicates: Array<{ rowNumber: number; documento: string; numero: string; date: string; sku: string; quantity: number; price: number; reason: 'sale' | 'return' }> = [];
   let skippedDuplicates = 0;
   
   const totalRows = rawData.length;
@@ -327,6 +328,16 @@ export function validateAndProcessEcommerceData(
         // Check for duplicates
         if (seenKeys.has(uniqueKey)) {
           skippedDuplicates++;
+          duplicates.push({
+            rowNumber,
+            documento,
+            numero,
+            date,
+            sku: sku || (row['Item Description'] || '').toString(),
+            quantity,
+            price,
+            reason: isReturnDoc ? 'return' : 'sale'
+          });
           continue;
         }
         seenKeys.add(uniqueKey);
@@ -406,7 +417,8 @@ export function validateAndProcessEcommerceData(
     totalRows,
     validSalesRows: processedSales.length,
     validReturnsRows: processedReturns.length,
-    skippedDuplicates
+    skippedDuplicates,
+    duplicates: duplicates.length > 0 ? duplicates : undefined
   };
 }
 
@@ -443,7 +455,8 @@ export async function parseEcommerceFile(
         totalRows: 0,
         validSalesRows: 0,
         validReturnsRows: 0,
-        skippedDuplicates: 0
+        skippedDuplicates: 0,
+        duplicates: undefined
       };
     }
     
@@ -455,7 +468,8 @@ export async function parseEcommerceFile(
       totalRows: 0,
       validSalesRows: 0,
       validReturnsRows: 0,
-      skippedDuplicates: 0
+      skippedDuplicates: 0,
+      duplicates: undefined
     };
   }
 }

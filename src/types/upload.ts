@@ -76,6 +76,17 @@ export interface ProcessedReturnData {
   reason?: string; // "RESO" o "NOTA CRED"
 }
 
+export interface DuplicateInfo {
+  rowNumber: number;
+  documento: string;
+  numero: string;
+  date: string;
+  sku: string;
+  quantity: number;
+  price: number;
+  reason: 'sale' | 'return';
+}
+
 export interface EcommerceUploadResult {
   success: boolean;
   sales?: ProcessedEcommerceSaleData[];
@@ -85,6 +96,7 @@ export interface EcommerceUploadResult {
   validSalesRows: number;
   validReturnsRows: number;
   skippedDuplicates: number;
+  duplicates?: DuplicateInfo[];
 }
 
 export interface UploadResult {

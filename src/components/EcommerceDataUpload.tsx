@@ -7,9 +7,10 @@ import { Progress } from "./ui/progress";
 import { Badge } from "./ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Upload, FileText, CheckCircle, AlertCircle, Download, Eye, ShoppingCart, RotateCcw } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { Upload, FileText, CheckCircle, AlertCircle, Download, Eye, ShoppingCart, RotateCcw, X } from "lucide-react";
 import { parseEcommerceFile } from "../utils/ecommerceParser";
-import { EcommerceUploadResult, ProcessedEcommerceSaleData, ProcessedReturnData } from "../types/upload";
+import { EcommerceUploadResult, ProcessedEcommerceSaleData, ProcessedReturnData, DuplicateInfo } from "../types/upload";
 import { toast } from "sonner";
 
 interface EcommerceDataUploadProps {
@@ -210,6 +211,55 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                     <div className="text-xs text-muted-foreground">
                       Righe ignorate
                     </div>
+                    {uploadResult.duplicates && uploadResult.duplicates.length > 0 && (
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="mt-2 w-full">
+                            <Eye className="w-3 h-3 mr-1" />
+                            Visualizza duplicati
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle>Righe Duplicate ({uploadResult.duplicates.length})</DialogTitle>
+                          </DialogHeader>
+                          <div className="mt-4">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Riga</TableHead>
+                                  <TableHead>Tipo</TableHead>
+                                  <TableHead>Documento</TableHead>
+                                  <TableHead>Numero</TableHead>
+                                  <TableHead>Data</TableHead>
+                                  <TableHead>SKU</TableHead>
+                                  <TableHead>Qty</TableHead>
+                                  <TableHead>Prezzo</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {uploadResult.duplicates.map((dup, idx) => (
+                                  <TableRow key={idx}>
+                                    <TableCell>{dup.rowNumber}</TableCell>
+                                    <TableCell>
+                                      <Badge variant={dup.reason === 'sale' ? 'default' : 'destructive'}>
+                                        {dup.reason === 'sale' ? 'Vendita' : 'Reso'}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>{dup.documento}</TableCell>
+                                    <TableCell>{dup.numero}</TableCell>
+                                    <TableCell>{new Date(dup.date).toLocaleDateString('it-IT'))}</TableCell>
+                                    <TableCell>{dup.sku}</TableCell>
+                                    <TableCell>{dup.quantity}</TableCell>
+                                    <TableCell>€{dup.price.toFixed(2)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    )}
                   </CardContent>
                 </Card>
               </div>
