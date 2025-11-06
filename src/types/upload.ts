@@ -56,6 +56,8 @@ export interface ProcessedEcommerceSaleData extends ProcessedSaleData {
   orderReference?: string;
   shippingCost?: number;
   taxRate?: number;
+  documento?: string;
+  numero?: string;
 }
 
 export interface ProcessedReturnData {

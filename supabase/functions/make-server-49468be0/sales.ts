@@ -22,6 +22,8 @@ interface SaleData {
   orderReference?: string;
   shippingCost?: number;
   taxRate?: number;
+  documento?: string;
+  numero?: string;
 }
 
 // Helper: fetch all sales with pagination to bypass 1000 row limit
@@ -189,6 +191,8 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
             orderReference: value.orderReference,
             shippingCost: value.shippingCost,
             taxRate: value.taxRate,
+            documento: value.documento,
+            numero: value.numero,
             purchasePrice: undefined
           } as SaleData;
         }
@@ -359,9 +363,18 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
       // Use the same normalizeSku function defined at top level
       const userKey = (u?: string) => (u || '').toString().trim().toLowerCase();
       
+      // Create unique signatures using the same logic as frontend
+      // For ecommerce sales: documento_numero_data_sku_qty_price
+      // For store sales: date_sku_quantity_amount (fallback)
       const existingSalesSignatures = new Set(
         existingSalesData.map((s: any) => {
           const sale = s.value || s;
+          // If we have documento and numero, it's an ecommerce sale - use more precise key
+          if (sale.documento && sale.numero) {
+            const price = sale.price || (sale.amount / sale.quantity);
+            return `${sale.documento}_${sale.numero}_${sale.date}_${sale.productId || sale.sku}_${sale.quantity}_${price}`;
+          }
+          // Fallback for store sales: use date_sku_quantity_amount
           return `${sale.date}_${sale.productId || sale.sku}_${sale.quantity}_${sale.amount}`;
         })
       );
@@ -376,7 +389,20 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
       for (let index = 0; index < sales.length; index++) {
         const sale = sales[index];
         const sku = sale.sku || sale.productId;
-        const saleSignature = `${sale.date}_${sku}_${sale.quantity}_${sale.amount}`;
+        
+        // Use same unique key logic as frontend ecommerce parser
+        // For ecommerce: documento_numero_data_sku_qty_price
+        // For store: date_sku_quantity_amount (fallback)
+        let saleSignature: string;
+        const saleAny = sale as any;
+        if (saleAny.documento && saleAny.numero) {
+          // Ecommerce sale - use documento and numero from sale object
+          const price = sale.price || (sale.amount / sale.quantity);
+          saleSignature = `${saleAny.documento}_${saleAny.numero}_${sale.date}_${sku}_${sale.quantity}_${price}`;
+        } else {
+          // Store sale - use simpler signature
+          saleSignature = `${sale.date}_${sku}_${sale.quantity}_${sale.amount}`;
+        }
         
         if (existingSalesSignatures.has(saleSignature)) {
           skippedDuplicates++;
@@ -693,7 +719,9 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
         country: saleData.country,
         orderReference: saleData.orderReference,
         shippingCost: saleData.shippingCost,
-        taxRate: saleData.taxRate
+        taxRate: saleData.taxRate,
+        documento: saleData.documento,
+        numero: saleData.numero
       };
       
       await kv.set(saleId, sale);

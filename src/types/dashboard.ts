@@ -18,6 +18,8 @@ export interface Sale {
   orderReference?: string;
   shippingCost?: number;
   taxRate?: number;
+  documento?: string;
+  numero?: string;
 }
 
 export interface Return {

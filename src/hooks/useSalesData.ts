@@ -19,6 +19,7 @@ export interface UseSalesDataReturn {
 
 // Convert ProcessedSaleData to Sale format
 function convertToSaleFormat(processedSale: ProcessedSaleData): Sale {
+  const ecommerceSale = processedSale as any; // Type assertion to access documento/numero
   return {
     id: `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     date: processedSale.date,
@@ -37,7 +38,9 @@ function convertToSaleFormat(processedSale: ProcessedSaleData): Sale {
     country: processedSale.country,
     orderReference: processedSale.orderReference,
     shippingCost: processedSale.shippingCost,
-    taxRate: processedSale.taxRate
+    taxRate: processedSale.taxRate,
+    documento: ecommerceSale.documento,
+    numero: ecommerceSale.numero
   };
 }
 

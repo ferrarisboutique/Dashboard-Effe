@@ -386,7 +386,9 @@ export function validateAndProcessEcommerceData(
             country: country || undefined,
             orderReference: orderReference || undefined,
             shippingCost: rowIndex === 0 ? shippingCost : undefined, // Only first row
-            taxRate
+            taxRate,
+            documento: documento || undefined,
+            numero: numero || undefined
           });
         }
         
