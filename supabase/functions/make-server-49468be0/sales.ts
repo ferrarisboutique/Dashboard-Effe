@@ -492,7 +492,9 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
           country: sale.country,
           orderReference: sale.orderReference,
           shippingCost: sale.shippingCost,
-          taxRate: sale.taxRate
+          taxRate: sale.taxRate,
+          documento: saleAny.documento,
+          numero: saleAny.numero
         };
         processedCount++;
       }
