@@ -27,7 +27,7 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
   const [fileInputKey, setFileInputKey] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [duplicatesDialogOpen, setDuplicatesDialogOpen] = useState(false);
-  const dialogOpeningRef = useRef(false);
+  const dialogOpenTimestampRef = useRef<number | null>(null);
 
   // Debug: log when dialog state changes
   useEffect(() => {
@@ -228,16 +228,10 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                           e.preventDefault();
                           e.stopPropagation();
                           console.log('Button clicked, opening dialog');
-                          console.log('Current duplicatesDialogOpen:', duplicatesDialogOpen);
-                          console.log('uploadResult.duplicates:', uploadResult.duplicates);
-                          // Set ref BEFORE opening dialog to prevent immediate close
-                          dialogOpeningRef.current = true;
+                          // Set timestamp BEFORE opening dialog to prevent immediate close
+                          dialogOpenTimestampRef.current = Date.now();
                           setDuplicatesDialogOpen(true);
-                          console.log('After setState, duplicatesDialogOpen should be true');
-                          // Reset ref after dialog has time to open
-                          setTimeout(() => {
-                            dialogOpeningRef.current = false;
-                          }, 300);
+                          console.log('Dialog open timestamp set:', dialogOpenTimestampRef.current);
                         }}
                       >
                         <Eye className="w-3 h-3 mr-1" />
@@ -400,6 +394,15 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
           open={duplicatesDialogOpen} 
           onOpenChange={(open) => {
             console.log('Dialog onOpenChange called with:', open);
+            if (open) {
+              // Set timestamp when dialog opens
+              dialogOpenTimestampRef.current = Date.now();
+              console.log('Dialog opening, timestamp set:', dialogOpenTimestampRef.current);
+            } else {
+              // Clear timestamp when dialog closes
+              dialogOpenTimestampRef.current = null;
+              console.log('Dialog closing, timestamp cleared');
+            }
             setDuplicatesDialogOpen(open);
           }}
         >
@@ -410,20 +413,22 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
               // Prevent focus from causing issues
             }}
             onInteractOutside={(e) => {
-              console.log('DialogContent onInteractOutside called', e);
-              console.log('dialogOpeningRef.current:', dialogOpeningRef.current);
-              // Prevent closing when dialog is opening (click on button propagates)
-              if (dialogOpeningRef.current) {
-                console.log('Preventing close because dialog is opening');
+              const now = Date.now();
+              const timeSinceOpen = dialogOpenTimestampRef.current ? now - dialogOpenTimestampRef.current : Infinity;
+              console.log('DialogContent onInteractOutside called', { timeSinceOpen, timestamp: dialogOpenTimestampRef.current });
+              // Prevent closing if dialog was opened less than 500ms ago
+              if (dialogOpenTimestampRef.current && timeSinceOpen < 500) {
+                console.log('Preventing close because dialog was opened', timeSinceOpen, 'ms ago');
                 e.preventDefault();
               }
             }}
             onPointerDownOutside={(e) => {
-              console.log('DialogContent onPointerDownOutside called', e);
-              console.log('dialogOpeningRef.current:', dialogOpeningRef.current);
-              // Prevent closing when dialog is opening
-              if (dialogOpeningRef.current) {
-                console.log('Preventing close because dialog is opening (pointer)');
+              const now = Date.now();
+              const timeSinceOpen = dialogOpenTimestampRef.current ? now - dialogOpenTimestampRef.current : Infinity;
+              console.log('DialogContent onPointerDownOutside called', { timeSinceOpen, timestamp: dialogOpenTimestampRef.current });
+              // Prevent closing if dialog was opened less than 500ms ago
+              if (dialogOpenTimestampRef.current && timeSinceOpen < 500) {
+                console.log('Preventing close because dialog was opened', timeSinceOpen, 'ms ago (pointer)');
                 e.preventDefault();
               }
             }}
