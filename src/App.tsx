@@ -40,9 +40,7 @@ import {
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import { Badge } from "./components/ui/badge";
-
-const API_BASE_URL = import.meta.env.VITE_SUPABASE_FUNCTION_URL || 'https://sbtkymupbjyikfwjeumk.supabase.co/functions/v1/make-server-49468be0';
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNidGt5bXVwYmp5aWtmd2pldW1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MDA0MTUsImV4cCI6MjA3NDQ3NjQxNX0.ONl5r0x89QJKQtP9jttBkvESpV6lDpc1ijydxtP7nzo';
+import { API_BASE_URL, publicAnonKey as ANON_KEY } from "./utils/supabase/info";
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('overview');
