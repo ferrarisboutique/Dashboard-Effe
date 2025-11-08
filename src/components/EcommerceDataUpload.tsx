@@ -28,6 +28,12 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
   const [uploadProgress, setUploadProgress] = useState(0);
   const [duplicatesDialogOpen, setDuplicatesDialogOpen] = useState(false);
 
+  // Debug: log when dialog state changes
+  useEffect(() => {
+    console.log('duplicatesDialogOpen changed:', duplicatesDialogOpen);
+    console.log('uploadResult?.duplicates:', uploadResult?.duplicates);
+  }, [duplicatesDialogOpen, uploadResult?.duplicates]);
+
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -219,7 +225,10 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                         className="mt-2 w-full"
                         onClick={() => {
                           console.log('Button clicked, opening dialog');
+                          console.log('Current duplicatesDialogOpen:', duplicatesDialogOpen);
+                          console.log('uploadResult.duplicates:', uploadResult.duplicates);
                           setDuplicatesDialogOpen(true);
+                          console.log('After setState, duplicatesDialogOpen should be true');
                         }}
                       >
                         <Eye className="w-3 h-3 mr-1" />
@@ -378,8 +387,19 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
 
       {/* Dialog for duplicates - rendered outside Card to ensure portal works */}
       {uploadResult?.duplicates && uploadResult.duplicates.length > 0 && (
-        <Dialog open={duplicatesDialogOpen} onOpenChange={setDuplicatesDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <Dialog 
+          open={duplicatesDialogOpen} 
+          onOpenChange={(open) => {
+            console.log('Dialog onOpenChange called with:', open);
+            setDuplicatesDialogOpen(open);
+          }}
+        >
+          <DialogContent 
+            className="max-w-4xl max-h-[80vh] overflow-y-auto"
+            onOpenAutoFocus={(e) => {
+              console.log('DialogContent onOpenAutoFocus called');
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Righe Duplicate ({uploadResult.duplicates.length})</DialogTitle>
               <DialogDescription>
