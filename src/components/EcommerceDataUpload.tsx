@@ -33,13 +33,6 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
   useEffect(() => {
     console.log('duplicatesDialogOpen changed:', duplicatesDialogOpen);
     console.log('uploadResult?.duplicates:', uploadResult?.duplicates);
-    if (duplicatesDialogOpen) {
-      dialogOpeningRef.current = true;
-      // Reset after a short delay to allow dialog to fully open
-      setTimeout(() => {
-        dialogOpeningRef.current = false;
-      }, 100);
-    }
   }, [duplicatesDialogOpen, uploadResult?.duplicates]);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,8 +230,14 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                           console.log('Button clicked, opening dialog');
                           console.log('Current duplicatesDialogOpen:', duplicatesDialogOpen);
                           console.log('uploadResult.duplicates:', uploadResult.duplicates);
+                          // Set ref BEFORE opening dialog to prevent immediate close
+                          dialogOpeningRef.current = true;
                           setDuplicatesDialogOpen(true);
                           console.log('After setState, duplicatesDialogOpen should be true');
+                          // Reset ref after dialog has time to open
+                          setTimeout(() => {
+                            dialogOpeningRef.current = false;
+                          }, 300);
                         }}
                       >
                         <Eye className="w-3 h-3 mr-1" />
@@ -412,6 +411,7 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
             }}
             onInteractOutside={(e) => {
               console.log('DialogContent onInteractOutside called', e);
+              console.log('dialogOpeningRef.current:', dialogOpeningRef.current);
               // Prevent closing when dialog is opening (click on button propagates)
               if (dialogOpeningRef.current) {
                 console.log('Preventing close because dialog is opening');
@@ -420,6 +420,7 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
             }}
             onPointerDownOutside={(e) => {
               console.log('DialogContent onPointerDownOutside called', e);
+              console.log('dialogOpeningRef.current:', dialogOpeningRef.current);
               // Prevent closing when dialog is opening
               if (dialogOpeningRef.current) {
                 console.log('Preventing close because dialog is opening (pointer)');
