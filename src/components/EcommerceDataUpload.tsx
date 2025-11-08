@@ -379,7 +379,15 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
           open={duplicatesDialogOpen} 
           onOpenChange={setDuplicatesDialogOpen}
         >
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent 
+            className="max-w-4xl max-h-[80vh] overflow-y-auto"
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)'
+            }}
+          >
             <DialogHeader>
               <DialogTitle>Righe Duplicate ({uploadResult.duplicates.length})</DialogTitle>
               <DialogDescription>
