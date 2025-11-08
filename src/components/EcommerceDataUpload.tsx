@@ -7,7 +7,7 @@ import { Progress } from "./ui/progress";
 import { Badge } from "./ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Upload, FileText, CheckCircle, AlertCircle, Download, Eye, ShoppingCart, RotateCcw, X } from "lucide-react";
 import { parseEcommerceFile } from "../utils/ecommerceParser";
 import { EcommerceUploadResult, ProcessedEcommerceSaleData, ProcessedReturnData, DuplicateInfo } from "../types/upload";
@@ -213,14 +213,18 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                       Righe ignorate
                     </div>
                     {uploadResult.duplicates && uploadResult.duplicates.length > 0 && (
-                      <Dialog open={duplicatesDialogOpen} onOpenChange={setDuplicatesDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="mt-2 w-full">
-                            <Eye className="w-3 h-3 mr-1" />
-                            Visualizza duplicati
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                      <>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="mt-2 w-full"
+                          onClick={() => setDuplicatesDialogOpen(true)}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          Visualizza duplicati
+                        </Button>
+                        <Dialog open={duplicatesDialogOpen} onOpenChange={setDuplicatesDialogOpen}>
+                          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                           <DialogHeader>
                             <DialogTitle>Righe Duplicate ({uploadResult.duplicates.length})</DialogTitle>
                             <DialogDescription>
@@ -263,6 +267,7 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                           </div>
                         </DialogContent>
                       </Dialog>
+                    </>
                     )}
                   </CardContent>
                 </Card>
