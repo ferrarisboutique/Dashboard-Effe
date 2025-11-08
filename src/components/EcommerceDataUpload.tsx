@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -27,11 +27,19 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
   const [fileInputKey, setFileInputKey] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [duplicatesDialogOpen, setDuplicatesDialogOpen] = useState(false);
+  const dialogOpeningRef = useRef(false);
 
   // Debug: log when dialog state changes
   useEffect(() => {
     console.log('duplicatesDialogOpen changed:', duplicatesDialogOpen);
     console.log('uploadResult?.duplicates:', uploadResult?.duplicates);
+    if (duplicatesDialogOpen) {
+      dialogOpeningRef.current = true;
+      // Reset after a short delay to allow dialog to fully open
+      setTimeout(() => {
+        dialogOpeningRef.current = false;
+      }, 100);
+    }
   }, [duplicatesDialogOpen, uploadResult?.duplicates]);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -223,7 +231,9 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                         variant="outline" 
                         size="sm" 
                         className="mt-2 w-full"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           console.log('Button clicked, opening dialog');
                           console.log('Current duplicatesDialogOpen:', duplicatesDialogOpen);
                           console.log('uploadResult.duplicates:', uploadResult.duplicates);
@@ -398,6 +408,26 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
             className="max-w-4xl max-h-[80vh] overflow-y-auto"
             onOpenAutoFocus={(e) => {
               console.log('DialogContent onOpenAutoFocus called');
+              // Prevent focus from causing issues
+            }}
+            onInteractOutside={(e) => {
+              console.log('DialogContent onInteractOutside called', e);
+              // Prevent closing when dialog is opening (click on button propagates)
+              if (dialogOpeningRef.current) {
+                console.log('Preventing close because dialog is opening');
+                e.preventDefault();
+              }
+            }}
+            onPointerDownOutside={(e) => {
+              console.log('DialogContent onPointerDownOutside called', e);
+              // Prevent closing when dialog is opening
+              if (dialogOpeningRef.current) {
+                console.log('Preventing close because dialog is opening (pointer)');
+                e.preventDefault();
+              }
+            }}
+            onEscapeKeyDown={(e) => {
+              console.log('DialogContent onEscapeKeyDown called');
             }}
           >
             <DialogHeader>
