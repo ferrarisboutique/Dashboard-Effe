@@ -27,13 +27,6 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
   const [fileInputKey, setFileInputKey] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [duplicatesDialogOpen, setDuplicatesDialogOpen] = useState(false);
-  const dialogOpenTimestampRef = useRef<number | null>(null);
-
-  // Debug: log when dialog state changes
-  useEffect(() => {
-    console.log('duplicatesDialogOpen changed:', duplicatesDialogOpen);
-    console.log('uploadResult?.duplicates:', uploadResult?.duplicates);
-  }, [duplicatesDialogOpen, uploadResult?.duplicates]);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -224,15 +217,7 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                         variant="outline" 
                         size="sm" 
                         className="mt-2 w-full"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          console.log('Button clicked, opening dialog');
-                          // Set timestamp BEFORE opening dialog to prevent immediate close
-                          dialogOpenTimestampRef.current = Date.now();
-                          setDuplicatesDialogOpen(true);
-                          console.log('Dialog open timestamp set:', dialogOpenTimestampRef.current);
-                        }}
+                        onClick={() => setDuplicatesDialogOpen(true)}
                       >
                         <Eye className="w-3 h-3 mr-1" />
                         Visualizza duplicati
@@ -392,50 +377,9 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
       {uploadResult?.duplicates && uploadResult.duplicates.length > 0 && (
         <Dialog 
           open={duplicatesDialogOpen} 
-          onOpenChange={(open) => {
-            console.log('Dialog onOpenChange called with:', open);
-            if (open) {
-              // Set timestamp when dialog opens
-              dialogOpenTimestampRef.current = Date.now();
-              console.log('Dialog opening, timestamp set:', dialogOpenTimestampRef.current);
-            } else {
-              // Clear timestamp when dialog closes
-              dialogOpenTimestampRef.current = null;
-              console.log('Dialog closing, timestamp cleared');
-            }
-            setDuplicatesDialogOpen(open);
-          }}
+          onOpenChange={setDuplicatesDialogOpen}
         >
-          <DialogContent 
-            className="max-w-4xl max-h-[80vh] overflow-y-auto"
-            onOpenAutoFocus={(e) => {
-              console.log('DialogContent onOpenAutoFocus called');
-              // Prevent focus from causing issues
-            }}
-            onInteractOutside={(e) => {
-              const now = Date.now();
-              const timeSinceOpen = dialogOpenTimestampRef.current ? now - dialogOpenTimestampRef.current : Infinity;
-              console.log('DialogContent onInteractOutside called', { timeSinceOpen, timestamp: dialogOpenTimestampRef.current });
-              // Prevent closing if dialog was opened less than 500ms ago
-              if (dialogOpenTimestampRef.current && timeSinceOpen < 500) {
-                console.log('Preventing close because dialog was opened', timeSinceOpen, 'ms ago');
-                e.preventDefault();
-              }
-            }}
-            onPointerDownOutside={(e) => {
-              const now = Date.now();
-              const timeSinceOpen = dialogOpenTimestampRef.current ? now - dialogOpenTimestampRef.current : Infinity;
-              console.log('DialogContent onPointerDownOutside called', { timeSinceOpen, timestamp: dialogOpenTimestampRef.current });
-              // Prevent closing if dialog was opened less than 500ms ago
-              if (dialogOpenTimestampRef.current && timeSinceOpen < 500) {
-                console.log('Preventing close because dialog was opened', timeSinceOpen, 'ms ago (pointer)');
-                e.preventDefault();
-              }
-            }}
-            onEscapeKeyDown={(e) => {
-              console.log('DialogContent onEscapeKeyDown called');
-            }}
-          >
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Righe Duplicate ({uploadResult.duplicates.length})</DialogTitle>
               <DialogDescription>
