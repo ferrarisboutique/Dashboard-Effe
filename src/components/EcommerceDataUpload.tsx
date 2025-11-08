@@ -213,61 +213,18 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                       Righe ignorate
                     </div>
                     {uploadResult.duplicates && uploadResult.duplicates.length > 0 && (
-                      <>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="mt-2 w-full"
-                          onClick={() => setDuplicatesDialogOpen(true)}
-                        >
-                          <Eye className="w-3 h-3 mr-1" />
-                          Visualizza duplicati
-                        </Button>
-                        <Dialog open={duplicatesDialogOpen} onOpenChange={setDuplicatesDialogOpen}>
-                          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>Righe Duplicate ({uploadResult.duplicates.length})</DialogTitle>
-                            <DialogDescription>
-                              Elenco delle righe duplicate rilevate durante l'elaborazione del file.
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="mt-4">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead>Riga</TableHead>
-                                  <TableHead>Tipo</TableHead>
-                                  <TableHead>Documento</TableHead>
-                                  <TableHead>Numero</TableHead>
-                                  <TableHead>Data</TableHead>
-                                  <TableHead>SKU</TableHead>
-                                  <TableHead>Qty</TableHead>
-                                  <TableHead>Prezzo</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {uploadResult.duplicates.map((dup, idx) => (
-                                  <TableRow key={idx}>
-                                    <TableCell>{dup.rowNumber}</TableCell>
-                                    <TableCell>
-                                      <Badge variant={dup.reason === 'sale' ? 'default' : 'destructive'}>
-                                        {dup.reason === 'sale' ? 'Vendita' : 'Reso'}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell>{dup.documento}</TableCell>
-                                    <TableCell>{dup.numero}</TableCell>
-                                    <TableCell>{new Date(dup.date).toLocaleDateString('it-IT')}</TableCell>
-                                    <TableCell>{dup.sku}</TableCell>
-                                    <TableCell>{dup.quantity}</TableCell>
-                                    <TableCell>€{dup.price.toFixed(2)}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="mt-2 w-full"
+                        onClick={() => {
+                          console.log('Button clicked, opening dialog');
+                          setDuplicatesDialogOpen(true);
+                        }}
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        Visualizza duplicati
+                      </Button>
                     )}
                   </CardContent>
                 </Card>
@@ -418,6 +375,54 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog for duplicates - rendered outside Card to ensure portal works */}
+      {uploadResult?.duplicates && uploadResult.duplicates.length > 0 && (
+        <Dialog open={duplicatesDialogOpen} onOpenChange={setDuplicatesDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Righe Duplicate ({uploadResult.duplicates.length})</DialogTitle>
+              <DialogDescription>
+                Elenco delle righe duplicate rilevate durante l'elaborazione del file.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Riga</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Documento</TableHead>
+                    <TableHead>Numero</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Qty</TableHead>
+                    <TableHead>Prezzo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {uploadResult.duplicates.map((dup, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>{dup.rowNumber}</TableCell>
+                      <TableCell>
+                        <Badge variant={dup.reason === 'sale' ? 'default' : 'destructive'}>
+                          {dup.reason === 'sale' ? 'Vendita' : 'Reso'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{dup.documento}</TableCell>
+                      <TableCell>{dup.numero}</TableCell>
+                      <TableCell>{new Date(dup.date).toLocaleDateString('it-IT')}</TableCell>
+                      <TableCell>{dup.sku}</TableCell>
+                      <TableCell>{dup.quantity}</TableCell>
+                      <TableCell>€{dup.price.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
