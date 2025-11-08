@@ -74,6 +74,13 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
       const result = await response.json();
       
       if (result.success) {
+        console.log('Fetched sales from backend:', result.data.length, 'items');
+        const ecommerceSales = result.data.filter((item: any) => item.channel === 'ecommerce' || item.channel === 'marketplace');
+        console.log('Ecommerce/Marketplace sales:', ecommerceSales.length);
+        if (ecommerceSales.length > 0) {
+          console.log('Sample ecommerce sale:', ecommerceSales[0]);
+        }
+        
         const salesData = result.data.map((item: any) => ({
           id: item.id || `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           date: item.date,
