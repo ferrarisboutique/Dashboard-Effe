@@ -90,6 +90,24 @@ export default function App() {
     { id: 'settings', label: 'Impostazioni', icon: Settings },
   ];
 
+  // Apply payment method mappings to existing sales data
+  const salesWithMappings = useMemo(() => {
+    return sales.map(sale => {
+      // If sale has a payment method and we have a mapping for it, apply the channel
+      if (sale.paymentMethod && paymentMappings[sale.paymentMethod]) {
+        const mapping = paymentMappings[sale.paymentMethod];
+        // Only apply mapping if it's for ecommerce or marketplace channels
+        if (mapping.channel === 'ecommerce' || mapping.channel === 'marketplace') {
+          return {
+            ...sale,
+            channel: mapping.channel
+          };
+        }
+      }
+      return sale;
+    });
+  }, [sales, paymentMappings]);
+
   // Load payment mappings
   useEffect(() => {
     loadPaymentMappings();
@@ -227,24 +245,6 @@ export default function App() {
       toast.error('Errore nell\'aggiornamento dati');
     }
   };
-
-  // Apply payment method mappings to existing sales data
-  const salesWithMappings = useMemo(() => {
-    return sales.map(sale => {
-      // If sale has a payment method and we have a mapping for it, apply the channel
-      if (sale.paymentMethod && paymentMappings[sale.paymentMethod]) {
-        const mapping = paymentMappings[sale.paymentMethod];
-        // Only apply mapping if it's for ecommerce or marketplace channels
-        if (mapping.channel === 'ecommerce' || mapping.channel === 'marketplace') {
-          return {
-            ...sale,
-            channel: mapping.channel
-          };
-        }
-      }
-      return sale;
-    });
-  }, [sales, paymentMappings]);
 
   // Helper to determine if we have data
   const hasSalesData = salesWithMappings.length > 0;
