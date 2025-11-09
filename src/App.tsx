@@ -92,7 +92,7 @@ export default function App() {
 
   // Apply payment method mappings to existing sales data
   const salesWithMappings = useMemo(() => {
-    return sales.map(sale => {
+    const mapped = sales.map(sale => {
       // If sale has a payment method and we have a mapping for it, apply the channel
       if (sale.paymentMethod && paymentMappings[sale.paymentMethod]) {
         const mapping = paymentMappings[sale.paymentMethod];
@@ -106,6 +106,22 @@ export default function App() {
       }
       return sale;
     });
+    
+    // Debug logging
+    console.log('Total sales:', sales.length);
+    console.log('Sales with mappings:', mapped.length);
+    const ecommerceCount = mapped.filter(s => s.channel === 'ecommerce').length;
+    const marketplaceCount = mapped.filter(s => s.channel === 'marketplace').length;
+    const onlineCount = mapped.filter(s => s.channel === 'ecommerce' || s.channel === 'marketplace').length;
+    console.log('Ecommerce sales:', ecommerceCount);
+    console.log('Marketplace sales:', marketplaceCount);
+    console.log('Total online sales:', onlineCount);
+    if (onlineCount > 0) {
+      console.log('Sample online sale:', mapped.find(s => s.channel === 'ecommerce' || s.channel === 'marketplace'));
+    }
+    console.log('Payment mappings:', Object.keys(paymentMappings).length);
+    
+    return mapped;
   }, [sales, paymentMappings]);
 
   // Load payment mappings
