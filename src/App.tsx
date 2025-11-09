@@ -94,16 +94,36 @@ export default function App() {
   const salesWithMappings = useMemo(() => {
     const mapped = sales.map(sale => {
       // If sale has a payment method and we have a mapping for it, apply the channel
+      // BUT: Only apply if the sale doesn't already have a valid online channel
+      // OR if the sale is an ecommerce sale (has documento/numero) and needs channel correction
+      const isEcommerceSale = (sale as any).documento && (sale as any).numero;
+      const hasValidOnlineChannel = sale.channel === 'ecommerce' || sale.channel === 'marketplace';
+      
       if (sale.paymentMethod && paymentMappings[sale.paymentMethod]) {
         const mapping = paymentMappings[sale.paymentMethod];
         // Only apply mapping if it's for ecommerce or marketplace channels
         if (mapping.channel === 'ecommerce' || mapping.channel === 'marketplace') {
-          return {
-            ...sale,
-            channel: mapping.channel
-          };
+          // Apply mapping if:
+          // 1. Sale is ecommerce (has documento/numero) and doesn't have valid channel, OR
+          // 2. Sale already has a valid online channel (can be updated), OR
+          // 3. Sale doesn't have a valid online channel (needs to be set)
+          if (isEcommerceSale || hasValidOnlineChannel || !sale.channel || sale.channel === 'unknown') {
+            return {
+              ...sale,
+              channel: mapping.channel
+            };
+          }
         }
       }
+      
+      // For ecommerce sales without payment method mapping, ensure they have a channel
+      if (isEcommerceSale && (!sale.channel || sale.channel === 'unknown')) {
+        return {
+          ...sale,
+          channel: 'ecommerce' // Default for ecommerce sales
+        };
+      }
+      
       return sale;
     });
     
@@ -120,6 +140,7 @@ export default function App() {
       console.log('Sample online sale:', mapped.find(s => s.channel === 'ecommerce' || s.channel === 'marketplace'));
     }
     console.log('Payment mappings:', Object.keys(paymentMappings).length);
+    console.log('Sample mappings:', Object.keys(paymentMappings).slice(0, 5).map(k => ({ method: k, mapping: paymentMappings[k] })));
     
     return mapped;
   }, [sales, paymentMappings]);
