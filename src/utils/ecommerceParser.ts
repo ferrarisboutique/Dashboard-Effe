@@ -235,15 +235,16 @@ export function validateAndProcessEcommerceData(
     const area = extractArea(supplierPlatform, areaField);
     
     // Extract payment method
-    const paymentMethod = (firstRow['Metodo paga'] || '').toString().trim();
+    const paymentMethod = (firstRow['Metodo pagamento'] || firstRow['Metodo paga'] || '').toString().trim();
     
     // Determine channel
     const channel = determineChannel(paymentMethod, supplierPlatform, paymentMappings);
     
     // Extract shipping cost (only for sales, once per transaction)
     let shippingCost: number | undefined = undefined;
-    if (!isReturnDoc && firstRow['Spese traspc']) {
-      const shipping = parseNumber(firstRow['Spese traspc'], 'Spese traspc', 0);
+    const shippingField = firstRow['Spese trasporto'] || firstRow['Spese traspc'];
+    if (!isReturnDoc && shippingField) {
+      const shipping = parseNumber(shippingField, 'Spese trasporto', 0);
       if (shipping !== null && shipping > 0) {
         shippingCost = shipping;
       }
