@@ -1,16 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Sale } from '../types/dashboard';
+import { Sale, Return } from '../types/dashboard';
 import { ProcessedSaleData, ProcessedReturnData } from '../types/upload';
 import { API_BASE_URL, publicAnonKey } from '../utils/supabase/info';
 import { toast } from 'sonner';
 
 export interface UseSalesDataReturn {
   sales: Sale[];
+  returns: Return[];
   loading: boolean;
   error: string | null;
   uploadSales: (salesData: ProcessedSaleData[], onProgress?: (progress: number) => void) => Promise<boolean>;
   uploadReturns: (returnsData: ProcessedReturnData[], onProgress?: (progress: number) => void) => Promise<boolean>;
   refreshSales: () => Promise<void>;
+  refreshReturns: () => Promise<void>;
   clearSales: () => Promise<boolean>;
   fetchOrphans: () => Promise<any[]>;
   bulkUpdateSales: (updates: Array<{ id: string; brand?: string; channel?: string }>) => Promise<boolean>;
@@ -46,6 +48,7 @@ function convertToSaleFormat(processedSale: ProcessedSaleData): Sale {
 
 export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
   const [sales, setSales] = useState<Sale[]>([]);
+  const [returns, setReturns] = useState<Return[]>([]);
   const [loading, setLoading] = useState(autoLoad);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,13 +77,6 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
       const result = await response.json();
       
       if (result.success) {
-        console.log('Fetched sales from backend:', result.data.length, 'items');
-        const ecommerceSales = result.data.filter((item: any) => item.channel === 'ecommerce' || item.channel === 'marketplace');
-        console.log('Ecommerce/Marketplace sales:', ecommerceSales.length);
-        if (ecommerceSales.length > 0) {
-          console.log('Sample ecommerce sale:', ecommerceSales[0]);
-        }
-        
         const salesData = result.data.map((item: any) => ({
           id: item.id || `sale_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           date: item.date,
@@ -200,8 +196,9 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
         toast.success(message);
       }
 
-      // Refresh sales data
+      // Refresh sales and returns data
       await fetchSales();
+      await fetchReturns();
 
       if (onProgress) {
         onProgress(100);
@@ -216,6 +213,67 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
       setLoading(false);
     }
   }, [fetchSales]);
+
+  const fetchReturns = useCallback(async () => {
+    try {
+      setError(null);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(`${API_BASE_URL}/sales/returns`, {
+        headers: {
+          'Authorization': `Bearer ${publicAnonKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch returns: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        const returnsData = result.data.map((item: any) => ({
+          id: item.id || `return_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          date: item.date,
+          channel: item.channel,
+          sku: item.sku,
+          quantity: item.quantity,
+          price: item.price,
+          amount: item.amount,
+          brand: item.brand || 'Unknown',
+          category: item.category || 'abbigliamento',
+          marketplace: item.marketplace,
+          paymentMethod: item.paymentMethod,
+          area: item.area,
+          country: item.country,
+          orderReference: item.orderReference,
+          returnShippingCost: item.returnShippingCost,
+          taxRate: item.taxRate,
+          reason: item.reason
+        }));
+        
+        setReturns(returnsData);
+      } else {
+        throw new Error(result.error || 'Failed to fetch returns data');
+      }
+    } catch (err) {
+      // Don't show error toast for returns if they don't exist yet
+      if (err instanceof Error && !err.message.includes('404')) {
+        console.error('Error fetching returns:', err);
+      }
+      setReturns([]);
+    }
+  }, []);
+
+  const refreshReturns = useCallback(async () => {
+    await fetchReturns();
+  }, [fetchReturns]);
 
   const uploadReturns = useCallback(async (
     returnsData: ProcessedReturnData[],
@@ -301,8 +359,9 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
         toast.success(message);
       }
 
-      // Refresh sales data
+      // Refresh sales and returns data
       await fetchSales();
+      await fetchReturns();
 
       if (onProgress) {
         onProgress(100);
@@ -385,16 +444,19 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
   useEffect(() => {
     if (autoLoad) {
       fetchSales();
+      fetchReturns();
     }
-  }, [autoLoad, fetchSales]);
+  }, [autoLoad, fetchSales, fetchReturns]);
 
   return {
     sales: sales || [],
+    returns: returns || [],
     loading,
     error,
     uploadSales,
     uploadReturns,
     refreshSales,
+    refreshReturns,
     clearSales,
     fetchOrphans: async () => {
       try {

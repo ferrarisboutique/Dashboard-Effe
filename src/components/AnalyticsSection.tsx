@@ -180,3 +180,5 @@ export function AnalyticsSection({ sales, paymentMappings }: AnalyticsSectionPro
   );
 }
 
+
+

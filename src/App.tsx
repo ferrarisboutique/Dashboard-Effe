@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense, useMemo } from "react";
 import { captureError } from "./utils/sentry";
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarProvider, SidebarTrigger } from "./components/ui/sidebar";
 import { Button } from "./components/ui/button";
@@ -54,11 +54,13 @@ export default function App() {
   // Use hooks with autoLoad enabled for production
   const { 
     sales, 
+    returns,
     loading: salesLoading, 
     error: salesError, 
     uploadSales,
     uploadReturns,
     refreshSales,
+    refreshReturns,
     clearSales
   } = useSalesData(true);
   
@@ -95,16 +97,16 @@ export default function App() {
 
   // Check for unmapped payment methods
   useEffect(() => {
-    if (sales.length > 0) {
+    if (salesWithMappings.length > 0) {
       const uniqueMethods = new Set<string>();
-      sales.forEach(sale => {
+      salesWithMappings.forEach(sale => {
         if (sale.paymentMethod && !paymentMappings[sale.paymentMethod]) {
           uniqueMethods.add(sale.paymentMethod);
         }
       });
       setUnmappedPaymentMethods(Array.from(uniqueMethods));
     }
-  }, [sales, paymentMappings]);
+  }, [salesWithMappings, paymentMappings]);
 
   const loadPaymentMappings = async () => {
     try {
@@ -178,6 +180,7 @@ export default function App() {
       if (success) {
         // Force refresh to get the newly uploaded returns data
         await refreshSales();
+        await refreshReturns();
       }
       return success;
     } catch (error) {
@@ -225,18 +228,33 @@ export default function App() {
     }
   };
 
+  // Apply payment method mappings to existing sales data
+  const salesWithMappings = useMemo(() => {
+    return sales.map(sale => {
+      // If sale has a payment method and we have a mapping for it, apply the channel
+      if (sale.paymentMethod && paymentMappings[sale.paymentMethod]) {
+        const mapping = paymentMappings[sale.paymentMethod];
+        // Only apply mapping if it's for ecommerce or marketplace channels
+        if (mapping.channel === 'ecommerce' || mapping.channel === 'marketplace') {
+          return {
+            ...sale,
+            channel: mapping.channel
+          };
+        }
+      }
+      return sale;
+    });
+  }, [sales, paymentMappings]);
+
   // Helper to determine if we have data
-  const hasSalesData = sales.length > 0;
+  const hasSalesData = salesWithMappings.length > 0;
   // Use pagination.total to check if inventory exists in database, not just current filtered results
   const hasInventoryData = (pagination.total || 0) > 0;
   const hasAnyData = hasSalesData || hasInventoryData;
 
   // Get total counts (use pagination.total for inventory to get real count)
   const totalInventoryCount = pagination.total || inventory.length;
-  const totalSalesCount = sales.length;
-
-  // Mock returns data for now (you can implement this later)
-  const returns: Return[] = [];
+  const totalSalesCount = salesWithMappings.length;
 
   const renderContent = () => {
     const isLoading = salesLoading || inventoryLoading;
@@ -303,7 +321,7 @@ export default function App() {
         
         return (
           <DashboardOverview
-            sales={sales}
+            sales={salesWithMappings}
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}
@@ -331,7 +349,7 @@ export default function App() {
         
         return (
           <StoresSection
-            sales={sales.filter(s => s.channel === 'negozio_donna' || s.channel === 'negozio_uomo')}
+            sales={salesWithMappings.filter(s => s.channel === 'negozio_donna' || s.channel === 'negozio_uomo')}
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}
@@ -358,7 +376,7 @@ export default function App() {
         
         return (
           <OnlineSection
-            sales={sales.filter(s => s.channel === 'ecommerce' || s.channel === 'marketplace')}
+            sales={salesWithMappings.filter(s => s.channel === 'ecommerce' || s.channel === 'marketplace')}
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}
@@ -475,7 +493,7 @@ export default function App() {
       case 'analytics':
         return (
           <AnalyticsSection 
-            sales={sales} 
+            sales={salesWithMappings} 
             paymentMappings={paymentMappings}
           />
         );
@@ -492,7 +510,7 @@ export default function App() {
       case 'oss':
         return (
           <OSSSection
-            sales={sales}
+            sales={salesWithMappings}
             returns={returns}
           />
         );
@@ -500,8 +518,11 @@ export default function App() {
       case 'payment-mapping':
         return (
           <PaymentMethodMapping 
-            sales={sales}
-            onMappingChange={loadPaymentMappings}
+            sales={salesWithMappings}
+            onMappingChange={async () => {
+              await loadPaymentMappings();
+              await refreshSales(); // Refresh sales to apply new mappings
+            }}
           />
         );
       case 'data-quality':
@@ -773,22 +794,6 @@ export default function App() {
                     >
                       <Icon className="w-4 h-4 mr-3" />
                       {item.label}
-                      {/* Show data indicators */}
-                      {item.id === 'overview' && hasAnyData && (
-                        <Badge variant="secondary" className="ml-auto text-xs">
-                          {totalSalesCount + totalInventoryCount}
-                        </Badge>
-                      )}
-                      {item.id === 'stores' && hasSalesData && (
-                        <Badge variant="secondary" className="ml-auto text-xs">
-                          {sales.filter(s => s.channel === 'negozio_donna' || s.channel === 'negozio_uomo').length}
-                        </Badge>
-                      )}
-                      {item.id === 'inventory' && hasInventoryData && (
-                        <Badge variant="secondary" className="ml-auto text-xs">
-                          {totalInventoryCount}
-                        </Badge>
-                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

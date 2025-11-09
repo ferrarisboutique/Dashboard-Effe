@@ -64,3 +64,5 @@ Gli SKU nelle vendite hanno un **formato completamente diverso** da quelli nell'
 3. Oppure accettare che molte vendite avranno "Unknown" se i sistemi sono diversi
 
 
+
+

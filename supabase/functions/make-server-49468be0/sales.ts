@@ -239,6 +239,35 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
       return jsonResponse({ success: true, data: sales });
     }
 
+    // GET /sales/returns
+    if (path === '/sales/returns' && method === 'GET') {
+      const returnsItems = await getAllReturnsItems();
+      const returns = returnsItems.map((item: any) => {
+        const value = item.value || {};
+        const id = value.id || item.key || `return_${Math.random().toString(36).substr(2, 9)}`;
+        return {
+          id,
+          date: value.date,
+          channel: value.channel,
+          sku: value.sku,
+          quantity: value.quantity,
+          price: value.price,
+          amount: value.amount,
+          brand: value.brand || 'Unknown',
+          category: value.category || 'abbigliamento',
+          marketplace: value.marketplace,
+          paymentMethod: value.paymentMethod,
+          area: value.area,
+          country: value.country,
+          orderReference: value.orderReference,
+          returnShippingCost: value.returnShippingCost,
+          taxRate: value.taxRate,
+          reason: value.reason
+        };
+      });
+      return jsonResponse({ success: true, data: returns });
+    }
+
     // GET /sales/payment-mappings
     if (path === '/sales/payment-mappings' && method === 'GET') {
       try {
