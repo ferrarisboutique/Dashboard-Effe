@@ -21,14 +21,31 @@ interface OnlineSectionProps {
 }
 
 export function OnlineSection({ sales, returns, inventory, dateRange, customStart, customEnd, unmappedPaymentMethods = [], onNavigateToMapping }: OnlineSectionProps) {
+  // Debug logging
+  console.log('OnlineSection - Total sales received:', sales.length);
+  console.log('OnlineSection - Date range:', dateRange);
+  console.log('OnlineSection - Sample sales:', sales.slice(0, 3).map(s => ({
+    channel: s.channel,
+    date: s.date,
+    amount: s.amount,
+    documento: (s as any).documento,
+    numero: (s as any).numero
+  })));
+  
   // Apply date filter first
   const filteredSales = filterDataByDateAdvanced(sales, dateRange, customStart, customEnd);
   const filteredReturns = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
+  
+  console.log('OnlineSection - Filtered sales:', filteredSales.length);
   
   const allMetrics = calculateMetrics(filteredSales, filteredReturns, inventory);
   
   const ecommerceSales = filteredSales.filter(s => s.channel === 'ecommerce');
   const marketplaceSales = filteredSales.filter(s => s.channel === 'marketplace');
+  
+  console.log('OnlineSection - Ecommerce sales:', ecommerceSales.length);
+  console.log('OnlineSection - Marketplace sales:', marketplaceSales.length);
+  console.log('OnlineSection - All metrics:', allMetrics);
   
   const ecommerceReturns = filteredReturns.filter(r => r.channel === 'ecommerce');
   const marketplaceReturns = filteredReturns.filter(r => r.channel === 'marketplace');

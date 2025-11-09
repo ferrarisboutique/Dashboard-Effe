@@ -375,15 +375,18 @@ export default function App() {
         );
       
       case 'online':
-        if (!hasSalesData && !isLoading) {
+        const onlineSales = salesWithMappings.filter(s => s.channel === 'ecommerce' || s.channel === 'marketplace');
+        const hasOnlineSales = onlineSales.length > 0;
+        
+        if (!hasOnlineSales && !isLoading) {
           return (
             <EmptyState
               icon={Globe}
               title="Nessun dato online"
               description="Carica i dati di vendita online per visualizzare le performance."
               action={
-                <Button onClick={() => setActiveSection('upload')}>
-                  Carica Dati Vendita
+                <Button onClick={() => setActiveSection('upload-ecommerce')}>
+                  Carica Dati Ecommerce
                 </Button>
               }
             />
@@ -392,7 +395,7 @@ export default function App() {
         
         return (
           <OnlineSection
-            sales={salesWithMappings.filter(s => s.channel === 'ecommerce' || s.channel === 'marketplace')}
+            sales={onlineSales}
             returns={returns}
             inventory={inventory}
             dateRange={dateRange}

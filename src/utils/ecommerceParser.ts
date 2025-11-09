@@ -100,8 +100,24 @@ function parseDate(dateValue: any, rowNumber: number): string | null {
   let year = parseInt(match[3]);
   
   // Convert 2-digit year to 4-digit
+  // Use current year as reference point
   if (year < 100) {
-    year = year <= 30 ? 2000 + year : 1900 + year;
+    const currentYear = new Date().getFullYear();
+    const currentCentury = Math.floor(currentYear / 100) * 100;
+    const currentYearInCentury = currentYear % 100;
+    
+    // If year is within reasonable range of current year (±10 years), use current century
+    // Otherwise, assume it's in the past century
+    if (year <= currentYearInCentury + 10) {
+      year = currentCentury + year;
+    } else {
+      // If year is > currentYearInCentury + 10, it's probably in the past century
+      year = (currentCentury - 100) + year;
+    }
+    
+    // Clamp to reasonable range
+    if (year < 2000) year = 2000 + (year % 100);
+    if (year > 2100) year = 1900 + (year % 100);
   }
   
   // Validate

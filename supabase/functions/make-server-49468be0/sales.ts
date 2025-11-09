@@ -169,13 +169,20 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
         const value = item.value || {};
         const id = value.id || item.key || `sale_${Math.random().toString(36).substr(2, 9)}`;
         const sku = value.sku || value.productId;
+        
+        // For ecommerce sales (identified by documento/numero), ensure channel is set
+        let channel = value.channel;
+        if (value.documento && value.numero && (!channel || channel === 'unknown')) {
+          channel = 'ecommerce';
+        }
+        
         if (!sku) {
           // No SKU, use existing brand or Unknown
           return {
             id,
             date: value.date,
             user: value.user,
-            channel: value.channel,
+            channel: channel,
             sku: value.sku || value.productId,
             productId: value.productId || value.sku,
             quantity: value.quantity,
@@ -217,7 +224,7 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
           id,
           date: value.date,
           user: value.user,
-          channel: value.channel,
+          channel: channel,
           sku: value.sku || value.productId,
           productId: value.productId || value.sku,
           quantity: value.quantity,
@@ -233,6 +240,8 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
             orderReference: value.orderReference,
             shippingCost: value.shippingCost,
             taxRate: value.taxRate,
+            documento: value.documento,
+            numero: value.numero,
             purchasePrice
           } as SaleData;
       });
@@ -501,12 +510,18 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
           }
         }
         
+        // For ecommerce sales (identified by documento/numero), ensure channel is set
+        // If no channel is set and it's an ecommerce sale, default to 'ecommerce'
+        if (saleAny.documento && saleAny.numero && (!channel || channel === 'unknown')) {
+          channel = 'ecommerce';
+        }
+        
         const saleId = `sale_${timestamp}_${index}`;
         salesToSave[saleId] = {
           id: saleId,
           date: sale.date,
           user: sale.user || 'unknown',
-          channel: channel,
+          channel: channel || 'unknown',
           sku: sku,
           productId: sku,
           quantity: sale.quantity,
