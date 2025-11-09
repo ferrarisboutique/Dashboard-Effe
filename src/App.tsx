@@ -152,7 +152,14 @@ export default function App() {
     onProgress?: (progress: number) => void
   ): Promise<boolean> => {
     try {
-      return await uploadSales(data, onProgress);
+      const success = await uploadSales(data, onProgress);
+      if (success) {
+        // Force refresh to get the newly uploaded sales data
+        await refreshSales();
+        // Reload payment mappings to update unmapped methods
+        await loadPaymentMappings();
+      }
+      return success;
     } catch (error) {
       if (error instanceof Error) {
         captureError(error, { context: 'handleEcommerceSalesUploaded' });
@@ -167,7 +174,12 @@ export default function App() {
     onProgress?: (progress: number) => void
   ): Promise<boolean> => {
     try {
-      return await uploadReturns(data, onProgress);
+      const success = await uploadReturns(data, onProgress);
+      if (success) {
+        // Force refresh to get the newly uploaded returns data
+        await refreshSales();
+      }
+      return success;
     } catch (error) {
       if (error instanceof Error) {
         captureError(error, { context: 'handleEcommerceReturnsUploaded' });
@@ -352,6 +364,8 @@ export default function App() {
             dateRange={dateRange}
             customStart={customStart}
             customEnd={customEnd}
+            unmappedPaymentMethods={unmappedPaymentMethods}
+            onNavigateToMapping={() => setActiveSection('payment-mapping')}
           />
         );
       

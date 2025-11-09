@@ -7,6 +7,7 @@ import { InventoryItem } from "../types/inventory";
 import { calculateMetrics, getSalesByDate, getMarketplaceData, getCategoryData, getBrandData, filterDataByDateAdvanced, calculateYoYChange } from "../utils/analytics";
 import { Globe, ShoppingCart, ExternalLink, Package } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { UnmappedPaymentMethodsAlert } from "./UnmappedPaymentMethodsAlert";
 
 interface OnlineSectionProps {
   sales: Sale[];
@@ -15,9 +16,11 @@ interface OnlineSectionProps {
   dateRange: string;
   customStart?: string;
   customEnd?: string;
+  unmappedPaymentMethods?: string[];
+  onNavigateToMapping?: () => void;
 }
 
-export function OnlineSection({ sales, returns, inventory, dateRange, customStart, customEnd }: OnlineSectionProps) {
+export function OnlineSection({ sales, returns, inventory, dateRange, customStart, customEnd, unmappedPaymentMethods = [], onNavigateToMapping }: OnlineSectionProps) {
   // Apply date filter first
   const filteredSales = filterDataByDateAdvanced(sales, dateRange, customStart, customEnd);
   const filteredReturns = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
@@ -66,6 +69,12 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
           Canali Online
         </h2>
       </div>
+
+      {/* Alert for unmapped payment methods */}
+      <UnmappedPaymentMethodsAlert 
+        unmappedMethods={unmappedPaymentMethods} 
+        onNavigateToMapping={onNavigateToMapping}
+      />
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
