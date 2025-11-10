@@ -165,6 +165,7 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
         getAllSalesItems(),
         getInventoryMap()
       ]);
+      let ecommerceFixed = 0;
       const sales = kvItems.map((item: any) => {
         const value = item.value || {};
         const id = value.id || item.key || `sale_${Math.random().toString(36).substr(2, 9)}`;
@@ -172,8 +173,12 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
         
         // For ecommerce sales (identified by documento/numero), ensure channel is set
         let channel = value.channel;
-        if (value.documento && value.numero && (!channel || channel === 'unknown')) {
-          channel = 'ecommerce';
+        // Fix: Handle null, empty string, or 'unknown' channel for ecommerce sales
+        if (value.documento && value.numero) {
+          if (!channel || channel === 'unknown' || channel === '' || channel === null) {
+            channel = 'ecommerce';
+            ecommerceFixed++;
+          }
         }
         
         if (!sku) {
@@ -245,6 +250,15 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
             purchasePrice
           } as SaleData;
       });
+      
+      // Log statistics for debugging
+      const ecommerceCount = sales.filter(s => s.channel === 'ecommerce').length;
+      const marketplaceCount = sales.filter(s => s.channel === 'marketplace').length;
+      const onlineCount = ecommerceCount + marketplaceCount;
+      const withDocumentoNumero = sales.filter((s: any) => s.documento && s.numero).length;
+      
+      console.log(`[GET /sales] Total: ${sales.length}, Ecommerce: ${ecommerceCount}, Marketplace: ${marketplaceCount}, Online: ${onlineCount}, Fixed channels: ${ecommerceFixed}, With documento/numero: ${withDocumentoNumero}`);
+      
       return jsonResponse({ success: true, data: sales });
     }
 
@@ -1070,6 +1084,184 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
         learned++;
       }
       return jsonResponse({ success: true, learned });
+    }
+
+    // GET /sales/duplicates - Identify duplicate sales
+    if (path === '/sales/duplicates' && method === 'GET') {
+      const kvItems = await getAllSalesItems();
+      
+      // Build signature map: signature -> array of { key, value }
+      const signatureMap = new Map<string, Array<{ key: string; value: any }>>();
+      
+      for (const item of kvItems) {
+        const sale = item.value || {};
+        const sku = sale.sku || sale.productId;
+        
+        // Use same signature logic as bulk upload
+        let signature: string;
+        if (sale.documento && sale.numero) {
+          // Ecommerce sale
+          const price = sale.price || (sale.amount / sale.quantity);
+          signature = `${sale.documento}_${sale.numero}_${sale.date}_${sku}_${sale.quantity}_${price}`;
+        } else {
+          // Store sale
+          signature = `${sale.date}_${sku}_${sale.quantity}_${sale.amount}`;
+        }
+        
+        if (!signatureMap.has(signature)) {
+          signatureMap.set(signature, []);
+        }
+        signatureMap.get(signature)!.push({ key: item.key, value: sale });
+      }
+      
+      // Find duplicates (signatures with more than 1 entry)
+      const duplicates: Array<{
+        signature: string;
+        count: number;
+        sales: Array<{ id: string; date: string; amount: number; channel: string; documento?: string; numero?: string }>;
+      }> = [];
+      
+      for (const [signature, entries] of signatureMap.entries()) {
+        if (entries.length > 1) {
+          duplicates.push({
+            signature,
+            count: entries.length,
+            sales: entries.map(e => ({
+              id: e.key,
+              date: e.value.date,
+              amount: e.value.amount,
+              channel: e.value.channel,
+              documento: e.value.documento,
+              numero: e.value.numero
+            }))
+          });
+        }
+      }
+      
+      // Sort by count (most duplicates first)
+      duplicates.sort((a, b) => b.count - a.count);
+      
+      const totalDuplicates = duplicates.reduce((sum, d) => sum + (d.count - 1), 0);
+      
+      return jsonResponse({
+        success: true,
+        totalDuplicateGroups: duplicates.length,
+        totalDuplicateRecords: totalDuplicates,
+        duplicates: duplicates.slice(0, 100) // Return first 100 groups
+      });
+    }
+
+    // POST /sales/remove-duplicates - Remove duplicate sales (keeps oldest)
+    if (path === '/sales/remove-duplicates' && method === 'POST') {
+      const kvItems = await getAllSalesItems();
+      
+      // Build signature map: signature -> array of { key, value, timestamp }
+      const signatureMap = new Map<string, Array<{ key: string; value: any; timestamp: number }>>();
+      
+      for (const item of kvItems) {
+        const sale = item.value || {};
+        const sku = sale.sku || sale.productId;
+        
+        // Extract timestamp from key (sale_TIMESTAMP_index)
+        const keyMatch = item.key.match(/^sale_(\d+)_/);
+        const timestamp = keyMatch ? parseInt(keyMatch[1], 10) : Date.now();
+        
+        // Use same signature logic as bulk upload
+        let signature: string;
+        if (sale.documento && sale.numero) {
+          // Ecommerce sale
+          const price = sale.price || (sale.amount / sale.quantity);
+          signature = `${sale.documento}_${sale.numero}_${sale.date}_${sku}_${sale.quantity}_${price}`;
+        } else {
+          // Store sale
+          signature = `${sale.date}_${sku}_${sale.quantity}_${sale.amount}`;
+        }
+        
+        if (!signatureMap.has(signature)) {
+          signatureMap.set(signature, []);
+        }
+        signatureMap.get(signature)!.push({ key: item.key, value: sale, timestamp });
+      }
+      
+      // Find duplicates and keep the oldest one (lowest timestamp)
+      const keysToDelete: string[] = [];
+      let duplicateGroups = 0;
+      
+      for (const [signature, entries] of signatureMap.entries()) {
+        if (entries.length > 1) {
+          duplicateGroups++;
+          // Sort by timestamp (oldest first)
+          entries.sort((a, b) => a.timestamp - b.timestamp);
+          // Keep the first (oldest), delete the rest
+          for (let i = 1; i < entries.length; i++) {
+            keysToDelete.push(entries[i].key);
+          }
+        }
+      }
+      
+      // Delete duplicates in batches
+      const BATCH_SIZE = 500;
+      let deleted = 0;
+      for (let i = 0; i < keysToDelete.length; i += BATCH_SIZE) {
+        const batch = keysToDelete.slice(i, i + BATCH_SIZE);
+        if (batch.length > 0) {
+          await kv.mdel(batch);
+          deleted += batch.length;
+        }
+      }
+      
+      return jsonResponse({
+        success: true,
+        duplicateGroups,
+        deletedCount: deleted,
+        message: `Rimossi ${deleted} record duplicati da ${duplicateGroups} gruppi`
+      });
+    }
+
+    // GET /sales/stats - Get database statistics
+    if (path === '/sales/stats' && method === 'GET') {
+      const kvItems = await getAllSalesItems();
+      
+      const stats = {
+        totalSales: kvItems.length,
+        byChannel: {} as Record<string, number>,
+        byMonth: {} as Record<string, number>,
+        ecommerceSales: 0,
+        withDocumentoNumero: 0,
+        totalAmount: 0,
+        sampleDates: [] as string[]
+      };
+      
+      for (const item of kvItems) {
+        const sale = item.value || {};
+        const channel = sale.channel || 'unknown';
+        stats.byChannel[channel] = (stats.byChannel[channel] || 0) + 1;
+        
+        // Extract month from date
+        if (sale.date) {
+          const date = new Date(sale.date);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          stats.byMonth[monthKey] = (stats.byMonth[monthKey] || 0) + 1;
+          
+          if (stats.sampleDates.length < 10) {
+            stats.sampleDates.push(sale.date);
+          }
+        }
+        
+        if (sale.documento && sale.numero) {
+          stats.withDocumentoNumero++;
+          if (sale.channel === 'ecommerce' || sale.channel === 'marketplace') {
+            stats.ecommerceSales++;
+          }
+        }
+        
+        stats.totalAmount += (sale.amount || 0);
+      }
+      
+      return jsonResponse({
+        success: true,
+        stats
+      });
     }
 
     // 404 for unknown sales routes
