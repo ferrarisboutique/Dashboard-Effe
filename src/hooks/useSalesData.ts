@@ -61,7 +61,7 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
       setError(null);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       
       const response = await fetch(`${API_BASE_URL}/sales`, {
         headers: {
@@ -449,7 +449,8 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
       fetchSales();
       fetchReturns();
     }
-  }, [autoLoad, fetchSales, fetchReturns]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLoad]); // Only run on autoLoad change, not when callbacks change
 
   return {
     sales: sales || [],
