@@ -137,3 +137,6 @@ Se dopo il deploy le vendite non compaiono ancora:
 
 Fammi sapere quando hai completato il deploy! 🚀
 
+
+
+

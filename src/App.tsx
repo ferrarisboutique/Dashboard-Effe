@@ -94,40 +94,19 @@ export default function App() {
     { id: 'settings', label: 'Impostazioni', icon: Settings },
   ];
 
-  // Apply payment method mappings to existing sales data
+  // Backend now applies payment mappings, but we keep a minimal fallback for ecommerce sales without channel
   const salesWithMappings = useMemo(() => {
     const mapped = sales.map(sale => {
-      // If sale has a payment method and we have a mapping for it, apply the channel
-      // BUT: Only apply if the sale doesn't already have a valid online channel
-      // OR if the sale is an ecommerce sale (has documento/numero) and needs channel correction
+      // Backend applies payment mappings, so we just use the channel from backend
+      // Only apply fallback for ecommerce sales without channel (shouldn't happen, but safety net)
       const isEcommerceSale = (sale as any).documento && (sale as any).numero;
-      const hasValidOnlineChannel = sale.channel === 'ecommerce' || sale.channel === 'marketplace';
-      
-      if (sale.paymentMethod && paymentMappings[sale.paymentMethod]) {
-        const mapping = paymentMappings[sale.paymentMethod];
-        // Only apply mapping if it's for ecommerce or marketplace channels
-        if (mapping.channel === 'ecommerce' || mapping.channel === 'marketplace') {
-          // Apply mapping if:
-          // 1. Sale is ecommerce (has documento/numero) and doesn't have valid channel, OR
-          // 2. Sale already has a valid online channel (can be updated), OR
-          // 3. Sale doesn't have a valid online channel (needs to be set)
-          if (isEcommerceSale || hasValidOnlineChannel || !sale.channel || sale.channel === 'unknown') {
-            return {
-              ...sale,
-              channel: mapping.channel
-            };
-          }
-        }
-      }
-      
-      // For ecommerce sales without payment method mapping, ensure they have a channel
-      if (isEcommerceSale && (!sale.channel || sale.channel === 'unknown')) {
+      const channel = sale.channel as 'ecommerce' | 'negozio_donna' | 'negozio_uomo' | 'marketplace' | undefined;
+      if (isEcommerceSale && (!channel || (channel as string) === 'unknown')) {
         return {
           ...sale,
-          channel: 'ecommerce' // Default for ecommerce sales
+          channel: 'ecommerce' as const // Fallback default for ecommerce sales
         };
       }
-      
       return sale;
     });
     
@@ -137,14 +116,24 @@ export default function App() {
     const ecommerceCount = mapped.filter(s => s.channel === 'ecommerce').length;
     const marketplaceCount = mapped.filter(s => s.channel === 'marketplace').length;
     const onlineCount = mapped.filter(s => s.channel === 'ecommerce' || s.channel === 'marketplace').length;
+    const withDocumentoNumero = mapped.filter((s: any) => (s as any).documento && (s as any).numero).length;
+    const withPaymentMethod = mapped.filter(s => s.paymentMethod).length;
     console.log('Ecommerce sales:', ecommerceCount);
     console.log('Marketplace sales:', marketplaceCount);
     console.log('Total online sales:', onlineCount);
+    console.log('With documento/numero:', withDocumentoNumero);
+    console.log('With paymentMethod:', withPaymentMethod);
     if (onlineCount > 0) {
-      console.log('Sample online sale:', mapped.find(s => s.channel === 'ecommerce' || s.channel === 'marketplace'));
+      const sampleOnline = mapped.find(s => s.channel === 'ecommerce' || s.channel === 'marketplace');
+      console.log('Sample online sale:', sampleOnline ? {
+        id: sampleOnline.id,
+        channel: sampleOnline.channel,
+        paymentMethod: sampleOnline.paymentMethod,
+        documento: (sampleOnline as any).documento,
+        numero: (sampleOnline as any).numero
+      } : null);
     }
-    console.log('Payment mappings:', Object.keys(paymentMappings).length);
-    console.log('Sample mappings:', Object.keys(paymentMappings).slice(0, 5).map(k => ({ method: k, mapping: paymentMappings[k] })));
+    console.log('Payment mappings loaded:', Object.keys(paymentMappings).length);
     
     return mapped;
   }, [sales, paymentMappings]);

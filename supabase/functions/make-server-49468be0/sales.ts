@@ -161,24 +161,64 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
   try {
     // GET /sales
     if (path === '/sales' && method === 'GET') {
-      const [kvItems, invMap] = await Promise.all([
+      const [kvItems, invMap, paymentMappingsData] = await Promise.all([
         getAllSalesItems(),
-        getInventoryMap()
+        getInventoryMap(),
+        // Load payment mappings to apply them when retrieving sales
+        (async () => {
+          try {
+            const mappings: Record<string, { macroArea: string; channel: string }> = {};
+            const allKeys = await kv.getByPrefix('payment_mapping_');
+            for (const item of allKeys) {
+              const key = item.key;
+              const paymentMethod = key.replace('payment_mapping_', '');
+              const mapping = item.value || {};
+              if (mapping.macroArea && mapping.channel) {
+                mappings[paymentMethod] = {
+                  macroArea: mapping.macroArea,
+                  channel: mapping.channel
+                };
+              }
+            }
+            return mappings;
+          } catch (e) {
+            return {};
+          }
+        })()
       ]);
       let ecommerceFixed = 0;
+      let mappingsApplied = 0;
       const sales = kvItems.map((item: any) => {
         const value = item.value || {};
         const id = value.id || item.key || `sale_${Math.random().toString(36).substr(2, 9)}`;
         const sku = value.sku || value.productId;
         
-        // For ecommerce sales (identified by documento/numero), ensure channel is set
+        // Start with existing channel
         let channel = value.channel;
-        // Fix: Handle null, empty string, or 'unknown' channel for ecommerce sales
-        if (value.documento && value.numero) {
-          if (!channel || channel === 'unknown' || channel === '' || channel === null) {
-            channel = 'ecommerce';
-            ecommerceFixed++;
+        const isEcommerceSale = value.documento && value.numero;
+        const paymentMethod = value.paymentMethod;
+        
+        // Apply payment method mapping if available
+        // Priority: Payment mapping > Ecommerce default > Existing channel
+        if (paymentMethod && paymentMappingsData[paymentMethod]) {
+          const mapping = paymentMappingsData[paymentMethod];
+          // Only apply mapping if it's for online channels (ecommerce or marketplace)
+          if (mapping.channel === 'ecommerce' || mapping.channel === 'marketplace') {
+            // Apply mapping if:
+            // 1. Sale is ecommerce (has documento/numero), OR
+            // 2. Sale doesn't have a store channel (negozio_donna/negozio_uomo)
+            const isStoreSale = channel === 'negozio_donna' || channel === 'negozio_uomo';
+            if (isEcommerceSale || !isStoreSale) {
+              channel = mapping.channel;
+              mappingsApplied++;
+            }
           }
+        }
+        
+        // For ecommerce sales without payment method mapping, ensure they have a channel
+        if (isEcommerceSale && (!channel || channel === 'unknown' || channel === '' || channel === null)) {
+          channel = 'ecommerce';
+          ecommerceFixed++;
         }
         
         if (!sku) {
@@ -256,8 +296,9 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
       const marketplaceCount = sales.filter(s => s.channel === 'marketplace').length;
       const onlineCount = ecommerceCount + marketplaceCount;
       const withDocumentoNumero = sales.filter((s: any) => s.documento && s.numero).length;
+      const withPaymentMethod = sales.filter((s: any) => s.paymentMethod).length;
       
-      console.log(`[GET /sales] Total: ${sales.length}, Ecommerce: ${ecommerceCount}, Marketplace: ${marketplaceCount}, Online: ${onlineCount}, Fixed channels: ${ecommerceFixed}, With documento/numero: ${withDocumentoNumero}`);
+      console.log(`[GET /sales] Total: ${sales.length}, Ecommerce: ${ecommerceCount}, Marketplace: ${marketplaceCount}, Online: ${onlineCount}, Fixed channels: ${ecommerceFixed}, Mappings applied: ${mappingsApplied}, With documento/numero: ${withDocumentoNumero}, With paymentMethod: ${withPaymentMethod}`);
       
       return jsonResponse({ success: true, data: sales });
     }
