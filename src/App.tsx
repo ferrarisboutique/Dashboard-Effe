@@ -17,6 +17,7 @@ import { PaymentMethodMapping } from "./components/PaymentMethodMapping";
 import { AnalyticsSection } from "./components/AnalyticsSection";
 import { EcommerceDataUpload } from "./components/EcommerceDataUpload";
 import { OSSSection } from "./components/OSSSection";
+import { DatabaseManager } from "./components/DatabaseManager";
 import { ProcessedSaleData, ProcessedEcommerceSaleData, ProcessedReturnData } from "./types/upload";
 import { ProcessedInventoryData } from "./types/inventory";
 import { Return } from "./types/dashboard";
@@ -61,7 +62,10 @@ export default function App() {
     uploadReturns,
     refreshSales,
     refreshReturns,
-    clearSales
+    clearSales,
+    getDatabaseStats,
+    getDuplicates,
+    removeDuplicates
   } = useSalesData(true);
   
   const { 
@@ -587,13 +591,20 @@ export default function App() {
       
       case 'settings':
         return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Impostazioni</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {/* Data Status */}
+          <div className="space-y-6">
+            <DatabaseManager
+              getDatabaseStats={getDatabaseStats}
+              getDuplicates={getDuplicates}
+              removeDuplicates={removeDuplicates}
+              refreshSales={refreshSales}
+            />
+            <Card>
+              <CardHeader>
+                <CardTitle>Impostazioni</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-6">
+                  {/* Data Status */}
                 <div>
                   <h4 className="font-medium mb-4">Stato Dati</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

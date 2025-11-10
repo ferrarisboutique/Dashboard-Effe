@@ -17,6 +17,9 @@ export interface UseSalesDataReturn {
   fetchOrphans: () => Promise<any[]>;
   bulkUpdateSales: (updates: Array<{ id: string; brand?: string; channel?: string }>) => Promise<boolean>;
   learnMappings: (payload: { brandMappings?: Array<{ sku: string; brand: string }>; channelMappings?: Array<{ user: string; channel: string }> }) => Promise<boolean>;
+  getDatabaseStats: () => Promise<any>;
+  getDuplicates: () => Promise<any>;
+  removeDuplicates: () => Promise<boolean>;
 }
 
 // Convert ProcessedSaleData to Sale format
