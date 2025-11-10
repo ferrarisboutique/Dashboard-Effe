@@ -808,6 +808,7 @@ export default function App() {
               </div>
             </CardContent>
           </Card>
+          </div>
         );
       
       default:
