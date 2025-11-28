@@ -291,6 +291,10 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
           } as SaleData;
       });
       
+      // DEBUG: Check if raw kvItems contain documento
+      const rawWithDoc = kvItems.filter((item: any) => item.value?.documento && item.value?.numero).length;
+      console.log(`[DEBUG RAW] kvItems with documento/numero: ${rawWithDoc} out of ${kvItems.length}`);
+      
       // Log statistics for debugging
       const ecommerceCount = sales.filter(s => s.channel === 'ecommerce').length;
       const marketplaceCount = sales.filter(s => s.channel === 'marketplace').length;
@@ -299,6 +303,14 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
       const withPaymentMethod = sales.filter((s: any) => s.paymentMethod).length;
       
       console.log(`[GET /sales] Total: ${sales.length}, Ecommerce: ${ecommerceCount}, Marketplace: ${marketplaceCount}, Online: ${onlineCount}, Fixed channels: ${ecommerceFixed}, Mappings applied: ${mappingsApplied}, With documento/numero: ${withDocumentoNumero}, With paymentMethod: ${withPaymentMethod}`);
+      
+      // DEBUG: Log first sale with documento to verify it's in the array before stringify
+      const sampleWithDoc = sales.find((s: any) => s.documento && s.numero);
+      if (sampleWithDoc) {
+        console.log(`[DEBUG GET /sales] Sample with doc: id=${sampleWithDoc.id}, documento=${sampleWithDoc.documento}, numero=${sampleWithDoc.numero}, channel=${sampleWithDoc.channel}`);
+      } else {
+        console.log(`[DEBUG GET /sales] NO sales with documento/numero found in array!`);
+      }
       
       return jsonResponse({ success: true, data: sales });
     }

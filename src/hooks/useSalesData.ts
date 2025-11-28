@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Sale, Return } from '../types/dashboard';
 import { ProcessedSaleData, ProcessedReturnData } from '../types/upload';
 import { API_BASE_URL, publicAnonKey } from '../utils/supabase/info';
 import { toast } from 'sonner';
+import { getCache, setCache, invalidateCache, CACHE_KEYS } from '../utils/cache';
 
 export interface UseSalesDataReturn {
   sales: Sale[];
@@ -54,11 +55,27 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
   const [returns, setReturns] = useState<Return[]>([]);
   const [loading, setLoading] = useState(autoLoad);
   const [error, setError] = useState<string | null>(null);
+  const isFetching = useRef(false);
 
-  const fetchSales = useCallback(async () => {
+  const fetchSales = useCallback(async (skipCache: boolean = false) => {
+    // Prevent duplicate fetches
+    if (isFetching.current) return;
+    
     try {
+      isFetching.current = true;
       setLoading(true);
       setError(null);
+      
+      // Check cache first (unless skipped)
+      if (!skipCache) {
+        const cachedSales = getCache<Sale[]>(CACHE_KEYS.SALES);
+        if (cachedSales && cachedSales.length > 0) {
+          setSales(cachedSales);
+          setLoading(false);
+          isFetching.current = false;
+          return;
+        }
+      }
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -102,6 +119,8 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
         }));
         
         setSales(salesData);
+        // Save to cache
+        setCache(CACHE_KEYS.SALES, salesData, { ttl: 5 * 60 * 1000 }); // 5 minutes
       } else {
         throw new Error(result.error || 'Failed to fetch sales data');
       }
@@ -110,6 +129,7 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
       toast.error('Errore nel caricamento dei dati di vendita');
     } finally {
       setLoading(false);
+      isFetching.current = false;
     }
   }, []);
 
@@ -381,7 +401,8 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
   }, [fetchSales]);
 
   const refreshSales = useCallback(async () => {
-    await fetchSales();
+    invalidateCache(CACHE_KEYS.SALES);
+    await fetchSales(true); // Skip cache on explicit refresh
   }, [fetchSales]);
 
   const clearSales = useCallback(async (): Promise<boolean> => {
@@ -552,6 +573,73 @@ export function useSalesData(autoLoad: boolean = true): UseSalesDataReturn {
         setError(errorMsg);
         toast.error('Errore nel salvataggio mapping');
         return false;
+      }
+    },
+    getDatabaseStats: async () => {
+      try {
+        const resp = await fetch(`${API_BASE_URL}/sales/stats`, {
+          headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+        }
+        
+        const result = await resp.json();
+        return result.success ? result.stats : null;
+      } catch (err) {
+        console.error('Error getting database stats:', err);
+        return null;
+      }
+    },
+    getDuplicates: async () => {
+      try {
+        const resp = await fetch(`${API_BASE_URL}/sales/duplicates`, {
+          headers: { 'Authorization': `Bearer ${publicAnonKey}` }
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+        }
+        
+        const result = await resp.json();
+        return result.success ? result : null;
+      } catch (err) {
+        console.error('Error getting duplicates:', err);
+        return null;
+      }
+    },
+    removeDuplicates: async () => {
+      try {
+        setLoading(true);
+        const resp = await fetch(`${API_BASE_URL}/sales/remove-duplicates`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${publicAnonKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+        }
+        
+        const result = await resp.json();
+        
+        if (result.success) {
+          toast.success(`${result.deletedCount || 0} duplicati rimossi con successo`);
+          await fetchSales();
+          return true;
+        } else {
+          throw new Error(result.error || 'Failed to remove duplicates');
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error removing duplicates';
+        setError(errorMsg);
+        toast.error('Errore nella rimozione dei duplicati');
+        return false;
+      } finally {
+        setLoading(false);
       }
     },
   };

@@ -1,68 +1,92 @@
-export function normalizeSku(value?: unknown): string {
-  return (value ?? '').toString().trim().toUpperCase();
+/**
+ * Utility di normalizzazione centralizzate per garantire consistenza
+ * nella gestione di SKU, utenti e altri identificatori.
+ */
+
+/**
+ * Normalizza un SKU per il matching consistente.
+ * Rimuove spazi, converte in uppercase e rimuove separatori comuni.
+ * 
+ * @param sku - SKU da normalizzare
+ * @returns SKU normalizzato
+ */
+export function normalizeSku(sku: string | undefined | null): string {
+  if (!sku) return '';
+  
+  // Convert to string, trim, uppercase
+  let normalized = sku.toString().trim().toUpperCase();
+  
+  // Remove common separators: dash, underscore, dot, slash, space
+  normalized = normalized.replace(/[-_\.\/\s]/g, '');
+  
+  // Remove any other non-alphanumeric characters
+  normalized = normalized.replace(/[^A-Z0-9]/g, '');
+  
+  return normalized;
 }
 
-export function parseEuroNumber(input: unknown): number {
-  if (typeof input === 'number') return input;
-  if (input === undefined || input === null) return 0;
-  let s = String(input).trim();
-  if (!s) return 0;
+/**
+ * Normalizza il nome utente per il matching dei canali.
+ * 
+ * @param user - Nome utente da normalizzare
+ * @returns Nome utente normalizzato (lowercase, trimmed)
+ */
+export function normalizeUser(user: string | undefined | null): string {
+  if (!user) return '';
+  return user.toString().trim().toLowerCase();
+}
+
+/**
+ * Normalizza un brand name per confronti consistenti.
+ * 
+ * @param brand - Brand da normalizzare  
+ * @returns Brand normalizzato (trimmed, title case)
+ */
+export function normalizeBrand(brand: string | undefined | null): string {
+  if (!brand) return '';
+  return brand.toString().trim();
+}
+
+/**
+ * Crea una signature unica per una vendita (usata per deduplicazione).
+ * 
+ * @param sale - Oggetto vendita con i campi necessari
+ * @returns Signature unica per la vendita
+ */
+export function createSaleSignature(sale: {
+  date: string;
+  sku?: string;
+  productId?: string;
+  quantity: number;
+  amount: number;
+  documento?: string;
+  numero?: string;
+  price?: number;
+}): string {
+  const sku = sale.sku || sale.productId || '';
   
-  // Remove currency symbols and spaces
-  s = s.replace(/€/g, '').replace(/\s/g, '');
-  
-  // Handle different number formats
-  if (s.includes('.') && s.includes(',')) {
-    // Determine which format: check position of . and ,
-    const dotPos = s.lastIndexOf('.');
-    const commaPos = s.lastIndexOf(',');
-    
-    if (dotPos > commaPos) {
-      // Format: 1,234.56 (US) - dot is decimal, comma is thousands
-      s = s.replace(/,/g, '');
-    } else {
-      // Format: 1.234,56 (EU) - comma is decimal, dot is thousands
-      s = s.replace(/\./g, '').replace(/,/g, '.');
-    }
-  } else if (s.includes(',')) {
-    // Only comma: could be EU decimal (1234,56) or US thousands (1,234)
-    // Check if there are digits after comma
-    const parts = s.split(',');
-    if (parts[1] && parts[1].length <= 2) {
-      // Likely decimal: 1234,56 -> 1234.56
-      s = s.replace(/,/g, '.');
-    } else {
-      // Likely thousands: 1,234 -> 1234
-      s = s.replace(/,/g, '');
-    }
+  // Per vendite ecommerce (con documento/numero), usa signature più specifica
+  if (sale.documento && sale.numero) {
+    const price = sale.price || (sale.quantity > 0 ? sale.amount / sale.quantity : 0);
+    return `${sale.documento}_${sale.numero}_${sale.date}_${sku}_${sale.quantity}_${price}`;
   }
   
-  const n = Number(s);
-  return Number.isNaN(n) ? 0 : n;
+  // Per vendite store, usa signature base
+  return `${sale.date}_${sku}_${sale.quantity}_${sale.amount}`;
 }
 
-export function parseDateFlexible(input: unknown): string | null {
-  if (input instanceof Date) return input.toISOString();
-  if (typeof input === 'number') {
-    const excelDate = new Date((input - 25569) * 86400 * 1000);
-    return excelDate.toISOString();
-  }
-  if (!input) return null;
-  const raw = String(input).trim();
-  const re = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
-  const m = raw.match(re);
-  if (!m) return null;
-  let d = parseInt(m[1]);
-  let mo = parseInt(m[2]);
-  let y = parseInt(m[3]);
-  const hh = m[4] ? parseInt(m[4]) : 0;
-  const mm = m[5] ? parseInt(m[5]) : 0;
-  const ss = m[6] ? parseInt(m[6]) : 0;
-  if (y < 100) y = y <= 30 ? 2000 + y : 1900 + y;
-  const dt = new Date(y, mo - 1, d, hh, mm, ss);
-  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
-  return dt.toISOString();
+/**
+ * Crea una signature unica per un reso (usata per deduplicazione).
+ * 
+ * @param ret - Oggetto reso con i campi necessari
+ * @returns Signature unica per il reso
+ */
+export function createReturnSignature(ret: {
+  date: string;
+  sku?: string;
+  orderReference?: string;
+  quantity: number;
+  amount: number;
+}): string {
+  return `${ret.date}_${ret.orderReference || ret.sku || ''}_${ret.quantity}_${ret.amount}`;
 }
-
-
-

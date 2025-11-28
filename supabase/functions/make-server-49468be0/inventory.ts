@@ -291,8 +291,9 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
       
       // Increased timeout to 240 seconds (4 minutes) for large uploads
       const TIMEOUT_MS = 240000;
+      let isTimedOut = false;
       const timeoutId = setTimeout(() => {
-        throw new Error('Processing timeout - chunk too large or server overload');
+        isTimedOut = true;
       }, TIMEOUT_MS);
       
       try {
@@ -316,6 +317,11 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
         const kvData: Record<string, any> = {};
         
         for (let i = 0; i < inventoryData.length; i++) {
+          // Check for timeout
+          if (isTimedOut) {
+            throw new Error('Processing timeout - chunk too large or server overload');
+          }
+          
           const item = inventoryData[i];
           
           // Skip invalid items

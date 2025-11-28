@@ -18,6 +18,8 @@ import { AnalyticsSection } from "./components/AnalyticsSection";
 import { EcommerceDataUpload } from "./components/EcommerceDataUpload";
 import { OSSSection } from "./components/OSSSection";
 import { DatabaseManager } from "./components/DatabaseManager";
+import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
+import { DashboardSkeleton, InventorySkeleton } from "./components/ui/skeleton";
 import { ProcessedSaleData, ProcessedEcommerceSaleData, ProcessedReturnData } from "./types/upload";
 import { ProcessedInventoryData } from "./types/inventory";
 import { Return } from "./types/dashboard";
@@ -110,30 +112,15 @@ export default function App() {
       return sale;
     });
     
-    // Debug logging
-    console.log('Total sales:', sales.length);
-    console.log('Sales with mappings:', mapped.length);
-    const ecommerceCount = mapped.filter(s => s.channel === 'ecommerce').length;
-    const marketplaceCount = mapped.filter(s => s.channel === 'marketplace').length;
-    const onlineCount = mapped.filter(s => s.channel === 'ecommerce' || s.channel === 'marketplace').length;
-    const withDocumentoNumero = mapped.filter((s: any) => (s as any).documento && (s as any).numero).length;
-    const withPaymentMethod = mapped.filter(s => s.paymentMethod).length;
-    console.log('Ecommerce sales:', ecommerceCount);
-    console.log('Marketplace sales:', marketplaceCount);
-    console.log('Total online sales:', onlineCount);
-    console.log('With documento/numero:', withDocumentoNumero);
-    console.log('With paymentMethod:', withPaymentMethod);
-    if (onlineCount > 0) {
-      const sampleOnline = mapped.find(s => s.channel === 'ecommerce' || s.channel === 'marketplace');
-      console.log('Sample online sale:', sampleOnline ? {
-        id: sampleOnline.id,
-        channel: sampleOnline.channel,
-        paymentMethod: sampleOnline.paymentMethod,
-        documento: (sampleOnline as any).documento,
-        numero: (sampleOnline as any).numero
-      } : null);
+    // Debug logging (only in development)
+    if (import.meta.env.DEV) {
+      console.log('Total sales:', sales.length);
+      console.log('Sales with mappings:', mapped.length);
+      const ecommerceCount = mapped.filter(s => s.channel === 'ecommerce').length;
+      const marketplaceCount = mapped.filter(s => s.channel === 'marketplace').length;
+      const onlineCount = ecommerceCount + marketplaceCount;
+      console.log('Online sales:', onlineCount, '(ecommerce:', ecommerceCount, ', marketplace:', marketplaceCount, ')');
     }
-    console.log('Payment mappings loaded:', Object.keys(paymentMappings).length);
     
     return mapped;
   }, [sales, paymentMappings]);
@@ -292,6 +279,11 @@ export default function App() {
 
     switch (activeSection) {
       case 'overview':
+        // Show skeleton during initial loading
+        if (isLoading && !hasAnyData) {
+          return <DashboardSkeleton />;
+        }
+        
         if (!hasAnyData && !isLoading) {
           return (
             <EmptyState
@@ -337,28 +329,32 @@ export default function App() {
                   <Package className="w-5 h-5" />
                   Statistiche Inventario
                 </h3>
-                <DashboardOverview
-                  sales={[]} // Vendite vuote
-                  returns={returns}
-                  inventory={inventory}
-                  dateRange={dateRange}
-                  totalInventoryCount={totalInventoryCount}
-                />
+                <SectionErrorBoundary sectionName="Dashboard Overview">
+                  <DashboardOverview
+                    sales={[]} // Vendite vuote
+                    returns={returns}
+                    inventory={inventory}
+                    dateRange={dateRange}
+                    totalInventoryCount={totalInventoryCount}
+                  />
+                </SectionErrorBoundary>
               </div>
             </div>
           );
         }
         
         return (
-          <DashboardOverview
-            sales={salesWithMappings}
-            returns={returns}
-            inventory={inventory}
-            dateRange={dateRange}
-            customStart={customStart}
-            customEnd={customEnd}
-            totalInventoryCount={totalInventoryCount}
-          />
+          <SectionErrorBoundary sectionName="Dashboard Overview" onReset={handleRefreshData}>
+            <DashboardOverview
+              sales={salesWithMappings}
+              returns={returns}
+              inventory={inventory}
+              dateRange={dateRange}
+              customStart={customStart}
+              customEnd={customEnd}
+              totalInventoryCount={totalInventoryCount}
+            />
+          </SectionErrorBoundary>
         );
       
       case 'stores':
@@ -421,6 +417,11 @@ export default function App() {
         );
       
       case 'inventory':
+        // Show skeleton during initial loading
+        if (inventoryLoading && !hasInventoryData) {
+          return <InventorySkeleton />;
+        }
+        
         if (!hasInventoryData && !isLoading) {
           return (
             <EmptyState
@@ -437,45 +438,47 @@ export default function App() {
         }
         
         return (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="flex items-center gap-2">
-                <Package className="w-6 h-6" />
-                Inventario
-              </h2>
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setActiveSection('upload-inventory')}
-                >
-                  Carica Altri Prodotti
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={async () => {
-                    if (confirm('Sei sicuro di voler cancellare tutto l\'inventario?')) {
-                      const success = await clearInventory();
-                      if (success) {
-                        toast.success('Inventario cancellato');
+          <SectionErrorBoundary sectionName="Inventario" onReset={refreshInventory}>
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="flex items-center gap-2">
+                  <Package className="w-6 h-6" />
+                  Inventario
+                </h2>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setActiveSection('upload-inventory')}
+                  >
+                    Carica Altri Prodotti
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={async () => {
+                      if (confirm('Sei sicuro di voler cancellare tutto l\'inventario?')) {
+                        const success = await clearInventory();
+                        if (success) {
+                          toast.success('Inventario cancellato');
+                        }
                       }
-                    }
-                  }}
-                >
-                  Cancella Tutto
-                </Button>
+                    }}
+                  >
+                    Cancella Tutto
+                  </Button>
+                </div>
               </div>
+              <InventoryTableSimple 
+                inventory={inventory} 
+                loading={inventoryLoading}
+                pagination={pagination}
+                filters={filters}
+                error={inventoryError}
+                onRefresh={refreshInventory}
+              />
             </div>
-            <InventoryTableSimple 
-              inventory={inventory} 
-              loading={inventoryLoading}
-              pagination={pagination}
-              filters={filters}
-              error={inventoryError}
-              onRefresh={refreshInventory}
-            />
-          </div>
+          </SectionErrorBoundary>
         );
       
       case 'upload':

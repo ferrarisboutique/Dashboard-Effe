@@ -117,27 +117,21 @@ export function validateAndProcessSalesData(rawData: any[]): UploadResult {
       }
 
       // Parse date (accept dd/mm/aa, dd/mm/aaaa, or dd/mm/aaaa hh:mm:ss)
-      let date: string;
+      let date: string = '';
       try {
         const dateValue = row.Data;
-        let dateString: string;
         
         if (typeof dateValue === 'number') {
           // Excel serial date (may include time) – convert using epoch
           const excelDate = new Date((dateValue - 25569) * 86400 * 1000);
           // Keep full ISO with time for uniqueness
           date = excelDate.toISOString();
-          // Jump to push
-          // eslint-disable-next-line no-useless-return
-          
         } else if (dateValue instanceof Date) {
           // XLSX can return Date objects directly
-          date = (dateValue as Date).toISOString();
+          date = dateValue.toISOString();
         } else {
-          dateString = dateValue.toString().trim();
-        }
-
-        if (!date) {
+          const dateString = dateValue.toString().trim();
+          
           // Validate format: dd/mm/aa, dd/mm/aaaa, or dd/mm/aaaa hh:mm[:ss]
           const dateTimeRegex = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/;
           const match = dateString.match(dateTimeRegex);
@@ -186,7 +180,8 @@ export function validateAndProcessSalesData(rawData: any[]): UploadResult {
           date = parsedDate.toISOString();
         }
       } catch (error) {
-        errors.push(`Riga ${rowNumber}: ${error.message}. Formato richiesto: dd/mm/aa, dd/mm/aaaa o dd/mm/aaaa hh:mm:ss (es: 15/12/24, 15/12/2024 o 30/09/2025 18:44:41)`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        errors.push(`Riga ${rowNumber}: ${errorMessage}. Formato richiesto: dd/mm/aa, dd/mm/aaaa o dd/mm/aaaa hh:mm:ss (es: 15/12/24, 15/12/2024 o 30/09/2025 18:44:41)`);
         return;
       }
 
@@ -223,7 +218,8 @@ export function validateAndProcessSalesData(rawData: any[]): UploadResult {
       });
 
     } catch (error) {
-      errors.push(`Riga ${rowNumber}: Errore di processing: ${error}`);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      errors.push(`Riga ${rowNumber}: Errore di processing: ${errorMessage}`);
     }
   });
 
