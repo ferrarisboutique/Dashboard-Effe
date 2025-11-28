@@ -58,9 +58,28 @@ export function InventoryTableSimple({
     }
   }, [pagination.page, currentPage]);
 
-  // Simple debounce for search - only trigger for non-empty search
+  // Track previous search term to detect when search is cleared
+  const prevSearchTermRef = React.useRef(searchTerm);
+  
+  // Debounced search effect
   useEffect(() => {
-    if (searchTerm.length === 0) return; // Don't auto-search on empty string
+    const prevSearchTerm = prevSearchTermRef.current;
+    prevSearchTermRef.current = searchTerm;
+    
+    // If search was cleared (had content before, now empty), reload all data
+    if (prevSearchTerm.length > 0 && searchTerm.length === 0) {
+      setCurrentPage(1);
+      onRefresh({
+        page: 1,
+        limit: 50,
+        brand: brandFilter !== 'all' ? brandFilter : undefined,
+        category: categoryFilter !== 'all' ? categoryFilter : undefined
+      });
+      return;
+    }
+    
+    // Don't auto-search on empty string or initial mount
+    if (searchTerm.length === 0) return;
     
     const timer = setTimeout(() => {
       setCurrentPage(1);
@@ -71,10 +90,11 @@ export function InventoryTableSimple({
         brand: brandFilter !== 'all' ? brandFilter : undefined,
         category: categoryFilter !== 'all' ? categoryFilter : undefined
       });
-    }, 1200); // Increased debounce time to reduce requests
+    }, 800); // Reduced debounce time for better UX
 
     return () => clearTimeout(timer);
-  }, [searchTerm, brandFilter, categoryFilter, onRefresh]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm]); // Only depend on searchTerm, not onRefresh (which changes reference)
 
   // Handle filter changes - removed auto-refresh to prevent excessive requests
   // Filters will be applied when user clicks Search button

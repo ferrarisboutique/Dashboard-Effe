@@ -1,5 +1,6 @@
 import { Sale, Return, DashboardMetrics } from '../types/dashboard';
 import { InventoryItem } from '../types/inventory';
+import { normalizeSku } from './normalize';
 
 // Filter data by date range
 export function filterDataByDateRange<T extends { date: string }>(data: T[], dateRange: string): T[] {
@@ -96,11 +97,18 @@ export function calculateMetrics(sales: Sale[], returns: Return[], inventory: In
   const returnRate = totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
 
   // Calculate margin based on purchase prices from inventory
-  const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
+  // Build a normalized SKU -> inventory item map for O(1) lookups
+  const inventoryMap = new Map<string, InventoryItem>();
+  inventory.forEach(item => {
+    if (item.sku) {
+      inventoryMap.set(normalizeSku(item.sku), item);
+    }
+  });
+  
   const totalCost = sales.reduce((sum, sale) => {
     const saleSku = normalizeSku((sale as any).sku || sale.productId);
     if (!saleSku) return sum;
-    const inventoryItem = inventory.find(item => normalizeSku(item.sku) === saleSku);
+    const inventoryItem = inventoryMap.get(saleSku);
     return sum + (inventoryItem ? inventoryItem.purchasePrice * sale.quantity : 0);
   }, 0);
   
@@ -185,12 +193,21 @@ export function getCategoryData(sales: Sale[]) {
 }
 
 export function getBrandData(sales: Sale[], inventory?: InventoryItem[]) {
-  const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
+  // Build a normalized SKU -> inventory item map for O(1) lookups
+  const inventoryMap = new Map<string, InventoryItem>();
+  if (inventory) {
+    inventory.forEach(item => {
+      if (item.sku) {
+        inventoryMap.set(normalizeSku(item.sku), item);
+      }
+    });
+  }
+  
   const grouped = sales.reduce((acc, sale) => {
     let brand = sale.brand;
     if ((!brand || brand === 'Unknown') && inventory) {
       const saleSku = normalizeSku((sale as any).sku || sale.productId);
-      const inv = inventory.find(i => normalizeSku(i.sku) === saleSku);
+      const inv = inventoryMap.get(saleSku);
       if (inv?.brand) brand = inv.brand;
     }
     const key = (brand || 'Sconosciuto').toString();
