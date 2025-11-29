@@ -76,6 +76,7 @@ export default function App() {
     error: inventoryError, 
     pagination,
     filters,
+    totalDatabaseCount, // Conteggio totale database (non influenzato dai filtri)
     refreshInventory, 
     uploadInventory, 
     clearInventory 
@@ -265,8 +266,8 @@ export default function App() {
 
   // Helper to determine if we have data
   const hasSalesData = salesWithMappings.length > 0;
-  // Use pagination.total to check if inventory exists in database, not just current filtered results
-  const hasInventoryData = (pagination.total || 0) > 0;
+  // Use totalDatabaseCount to check if inventory exists in database (not affected by search filters)
+  const hasInventoryData = (totalDatabaseCount || 0) > 0;
   const hasAnyData = hasSalesData || hasInventoryData;
 
   // Get total counts (use pagination.total for inventory to get real count)

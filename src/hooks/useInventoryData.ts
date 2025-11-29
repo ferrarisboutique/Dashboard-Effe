@@ -47,6 +47,9 @@ export function useInventoryData(autoLoad: boolean = true) {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // totalDatabaseCount: count totale nel database (non filtrato)
+  // pagination.total: count filtrato per la ricerca corrente
+  const [totalDatabaseCount, setTotalDatabaseCount] = useState<number>(0);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     limit: 50,
@@ -131,14 +134,25 @@ export function useInventoryData(autoLoad: boolean = true) {
       setInventory(Array.isArray(data.inventory) ? data.inventory : []);
       
       if (data.pagination && typeof data.pagination === 'object') {
+        const paginationTotal = data.pagination.total || 0;
         setPagination({
           page: data.pagination.page || 1,
           limit: data.pagination.limit || 50,
-          total: data.pagination.total || 0,
+          total: paginationTotal,
           totalPages: data.pagination.totalPages || 0,
           hasNext: data.pagination.hasNext || false,
           hasPrev: data.pagination.hasPrev || false
         });
+        
+        // Se non ci sono filtri di ricerca, questo è il conteggio totale del database
+        const isUnfilteredRequest = !params?.search && !params?.brand && !params?.category;
+        if (isUnfilteredRequest && paginationTotal > 0) {
+          setTotalDatabaseCount(paginationTotal);
+        } else if (isUnfilteredRequest && paginationTotal === 0) {
+          // Database realmente vuoto
+          setTotalDatabaseCount(0);
+        }
+        // Se è una ricerca filtrata, non aggiornare totalDatabaseCount
       }
       
       if (data.filters && typeof data.filters === 'object') {
@@ -381,6 +395,7 @@ export function useInventoryData(autoLoad: boolean = true) {
     error,
     pagination,
     filters,
+    totalDatabaseCount, // Conteggio totale nel database (non filtrato)
     uploadInventory,
     refreshInventory,
     clearInventory,
