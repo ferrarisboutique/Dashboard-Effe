@@ -276,10 +276,11 @@ export function useInventoryData(autoLoad: boolean = true) {
       setLoading(true);
       setError(null);
 
+      // Timeout aumentato a 120 secondi per inventari grandi
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
-      }, 25000);
+      }, 120000);
       
       const response = await fetch(
         `${API_BASE_URL}/inventory`,
@@ -303,7 +304,16 @@ export function useInventoryData(autoLoad: boolean = true) {
       const result = await response.json();
       
       if (result.success) {
-        await refreshInventory();
+        // Reset stato inventario locale immediatamente
+        setInventory([]);
+        setPagination({
+          page: 1,
+          limit: 50,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false
+        });
         return true;
       } else {
         throw new Error(result.error || 'Failed to clear inventory');
@@ -311,7 +321,7 @@ export function useInventoryData(autoLoad: boolean = true) {
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'AbortError') {
-          setError('Operazione di cancellazione interrotta - il processo potrebbe richiedere più tempo. Riprova tra qualche momento.');
+          setError('Operazione di cancellazione interrotta per timeout. Per inventari molto grandi, la cancellazione potrebbe continuare in background.');
         } else if (error.message.includes('Failed to fetch')) {
           setError('Errore di connessione durante la cancellazione - verifica la connessione internet e riprova');
         } else {
@@ -324,7 +334,7 @@ export function useInventoryData(autoLoad: boolean = true) {
     } finally {
       setLoading(false);
     }
-  }, [refreshInventory]);
+  }, []);
 
   const getInventoryCount = useCallback(async (): Promise<number | null> => {
     try {

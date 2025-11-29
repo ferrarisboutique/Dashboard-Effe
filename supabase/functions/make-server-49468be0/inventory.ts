@@ -483,12 +483,19 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
 
     // DELETE /inventory
     if (path === '/inventory' && method === 'DELETE') {
+      const startTime = Date.now();
+      console.log('Starting inventory deletion...');
+      
       const inventoryItems = await getAllInventoryItems();
       const keys = inventoryItems.map(item => item.key);
       
+      console.log(`Found ${keys.length} inventory items to delete`);
+      
       if (keys.length > 0) {
-        const BATCH_SIZE = 100;
+        // Batch size aumentato per velocizzare
+        const BATCH_SIZE = 500;
         let deletedCount = 0;
+        let errors = 0;
         
         for (let i = 0; i < keys.length; i += BATCH_SIZE) {
           const batch = keys.slice(i, i + BATCH_SIZE);
@@ -496,20 +503,33 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
           try {
             await kv.mdel(batch);
             deletedCount += batch.length;
+            
+            // Log progress ogni 5000 items
+            if (deletedCount % 5000 === 0) {
+              console.log(`Deleted ${deletedCount}/${keys.length} items...`);
+            }
           } catch (batchError) {
+            errors++;
+            console.error(`Error deleting batch at ${i}: ${batchError}`);
             // Continue with other batches
           }
           
+          // Delay ridotto a 20ms per velocizzare
           if (i + BATCH_SIZE < keys.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 20));
           }
         }
+        
+        const processingTime = Date.now() - startTime;
+        console.log(`Inventory deletion completed: ${deletedCount} items in ${processingTime}ms`);
         
         return jsonResponse({
           success: true,
           message: `${deletedCount} inventory items deleted successfully`,
           deletedCount,
-          totalItems: keys.length
+          totalItems: keys.length,
+          errors,
+          processingTime
         });
       } else {
         return jsonResponse({
