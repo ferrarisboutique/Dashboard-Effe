@@ -229,11 +229,11 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
               return (
                 <MetricCard
                   title="Marginalità"
-                  value={ecommerceMetrics.margin.toFixed(1)}
-                  suffix="%"
-                  change={ecommerceMarginYoY.change}
-                  changeType={ecommerceMarginYoY.changeType}
-                  description="Variazione vs anno precedente"
+                  value={ecommerceMetrics.margin !== null ? ecommerceMetrics.margin.toFixed(1) : "N/D"}
+                  suffix={ecommerceMetrics.margin !== null ? "%" : ""}
+                  change={ecommerceMetrics.margin !== null ? ecommerceMarginYoY.change : undefined}
+                  changeType={ecommerceMetrics.margin !== null ? ecommerceMarginYoY.changeType : "neutral"}
+                  description={ecommerceMetrics.margin !== null ? "Variazione vs anno precedente" : "Carica inventario"}
                 />
               );
             })()}
@@ -344,11 +344,11 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
               return (
                 <MetricCard
                   title="Marginalità"
-                  value={marketplaceMetrics.margin.toFixed(1)}
-                  suffix="%"
-                  change={marketplaceMarginYoY.change}
-                  changeType={marketplaceMarginYoY.changeType}
-                  description="Variazione vs anno precedente"
+                  value={marketplaceMetrics.margin !== null ? marketplaceMetrics.margin.toFixed(1) : "N/D"}
+                  suffix={marketplaceMetrics.margin !== null ? "%" : ""}
+                  change={marketplaceMetrics.margin !== null ? marketplaceMarginYoY.change : undefined}
+                  changeType={marketplaceMetrics.margin !== null ? marketplaceMarginYoY.changeType : "neutral"}
+                  description={marketplaceMetrics.margin !== null ? "Variazione vs anno precedente" : "Carica inventario"}
                 />
               );
             })()}

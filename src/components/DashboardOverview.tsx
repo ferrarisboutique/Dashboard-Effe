@@ -104,11 +104,14 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, custom
         />
         <MetricCard
           title="Marginalità Media"
-          value={metrics.margin.toFixed(1)}
-          suffix="%"
-          change={marginYoY.change}
-          changeType={marginYoY.changeType}
-          description="Variazione vs anno precedente"
+          value={metrics.margin !== null ? metrics.margin.toFixed(1) : "N/D"}
+          suffix={metrics.margin !== null ? "%" : ""}
+          change={metrics.margin !== null ? marginYoY.change : undefined}
+          changeType={metrics.margin !== null ? marginYoY.changeType : "neutral"}
+          description={metrics.margin !== null 
+            ? "Variazione vs anno precedente" 
+            : "Carica inventario per calcolare"
+          }
         />
       </div>
 

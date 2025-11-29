@@ -92,9 +92,9 @@ export function getYoYForRange(sales: Sale[], start: string, end: string) {
 }
 
 export function calculateMetrics(sales: Sale[], returns: Return[], inventory: InventoryItem[]): DashboardMetrics {
-  const totalSales = sales.reduce((sum, sale) => sum + sale.amount, 0);
+  const totalSalesAmount = sales.reduce((sum, sale) => sum + sale.amount, 0);
   const totalReturns = returns.reduce((sum, ret) => sum + ret.amount, 0);
-  const returnRate = totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
+  const returnRate = totalSalesAmount > 0 ? (totalReturns / totalSalesAmount) * 100 : 0;
 
   // Calculate margin based on purchase prices from inventory
   // Build a normalized SKU -> inventory item map for O(1) lookups
@@ -105,14 +105,32 @@ export function calculateMetrics(sales: Sale[], returns: Return[], inventory: In
     }
   });
   
-  const totalCost = sales.reduce((sum, sale) => {
-    const saleSku = normalizeSku((sale as any).sku || sale.productId);
-    if (!saleSku) return sum;
-    const inventoryItem = inventoryMap.get(saleSku);
-    return sum + (inventoryItem ? inventoryItem.purchasePrice * sale.quantity : 0);
-  }, 0);
+  // Count matched vs unmatched sales for inventory stats
+  let matchedSalesCount = 0;
+  let matchedSalesAmount = 0;
+  let totalCost = 0;
   
-  const margin = totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
+  sales.forEach(sale => {
+    const saleSku = normalizeSku((sale as any).sku || sale.productId);
+    if (!saleSku) return;
+    const inventoryItem = inventoryMap.get(saleSku);
+    if (inventoryItem && inventoryItem.purchasePrice > 0) {
+      matchedSalesCount++;
+      matchedSalesAmount += sale.amount;
+      totalCost += inventoryItem.purchasePrice * sale.quantity;
+    }
+  });
+  
+  // Calculate margin only if we have inventory matches
+  // If no inventory or no matches, margin is null (not calculable)
+  const hasInventory = inventory.length > 0;
+  const hasMatches = matchedSalesCount > 0 && totalCost > 0;
+  
+  let margin: number | null = null;
+  if (hasMatches && matchedSalesAmount > 0) {
+    // Calculate margin only on matched sales (more accurate)
+    margin = ((matchedSalesAmount - totalCost) / matchedSalesAmount) * 100;
+  }
 
   const salesByChannel = {
     negozio_donna: sales.filter(s => s.channel === 'negozio_donna').reduce((sum, s) => sum + s.amount, 0),
@@ -131,14 +149,24 @@ export function calculateMetrics(sales: Sale[], returns: Return[], inventory: In
     return acc;
   }, {} as Record<string, number>);
 
+  // Inventory matching statistics
+  const inventoryMatchStats = {
+    totalSales: sales.length,
+    matchedSales: matchedSalesCount,
+    unmatchedSales: sales.length - matchedSalesCount,
+    matchPercentage: sales.length > 0 ? (matchedSalesCount / sales.length) * 100 : 0,
+    hasInventory,
+  };
+
   return {
-    totalSales,
+    totalSales: totalSalesAmount,
     totalReturns,
     returnRate,
     margin,
     salesByChannel,
     salesByBrand,
     salesByCategory,
+    inventoryMatchStats,
   };
 }
 

@@ -43,7 +43,7 @@ export interface DashboardMetrics {
   totalSales: number;
   totalReturns: number;
   returnRate: number;
-  margin: number;
+  margin: number | null; // null when inventory is empty or no matches
   salesByChannel: {
     negozio_donna: number;
     negozio_uomo: number;
@@ -52,4 +52,12 @@ export interface DashboardMetrics {
   };
   salesByBrand: Record<string, number>;
   salesByCategory: Record<string, number>;
+  // Inventory matching stats
+  inventoryMatchStats?: {
+    totalSales: number;
+    matchedSales: number;
+    unmatchedSales: number;
+    matchPercentage: number;
+    hasInventory: boolean;
+  };
 }

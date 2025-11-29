@@ -131,14 +131,17 @@ export function StoresSection({ sales, returns, inventory, dateRange, customStar
               return totalSales > 0 ? ((totalSales - totalCost) / totalSales) * 100 : 0;
             }
           );
+          const avgMargin = (womenMetrics.margin !== null && menMetrics.margin !== null)
+            ? (womenMetrics.margin + menMetrics.margin) / 2
+            : null;
           return (
             <MetricCard
               title="Margine Medio"
-              value={(womenMetrics.margin + menMetrics.margin) / 2}
-              suffix="%"
-              change={avgMarginYoY.change}
-              changeType={avgMarginYoY.changeType}
-              description="Variazione vs anno precedente"
+              value={avgMargin !== null ? avgMargin.toFixed(1) : "N/D"}
+              suffix={avgMargin !== null ? "%" : ""}
+              change={avgMargin !== null ? avgMarginYoY.change : undefined}
+              changeType={avgMargin !== null ? avgMarginYoY.changeType : "neutral"}
+              description={avgMargin !== null ? "Variazione vs anno precedente" : "Carica inventario"}
             />
           );
         })()}
@@ -244,11 +247,11 @@ export function StoresSection({ sales, returns, inventory, dateRange, customStar
               return (
                 <MetricCard
                   title="Marginalità"
-                  value={womenMetrics.margin.toFixed(1)}
-                  suffix="%"
-                  change={womenMarginYoY.change}
-                  changeType={womenMarginYoY.changeType}
-                  description="Variazione vs anno precedente"
+                  value={womenMetrics.margin !== null ? womenMetrics.margin.toFixed(1) : "N/D"}
+                  suffix={womenMetrics.margin !== null ? "%" : ""}
+                  change={womenMetrics.margin !== null ? womenMarginYoY.change : undefined}
+                  changeType={womenMetrics.margin !== null ? womenMarginYoY.changeType : "neutral"}
+                  description={womenMetrics.margin !== null ? "Variazione vs anno precedente" : "Carica inventario"}
                 />
               );
             })()}
@@ -374,11 +377,11 @@ export function StoresSection({ sales, returns, inventory, dateRange, customStar
               return (
                 <MetricCard
                   title="Marginalità" 
-                  value={menMetrics.margin.toFixed(1)}
-                  suffix="%"
-                  change={menMarginYoY.change}
-                  changeType={menMarginYoY.changeType}
-                  description="Variazione vs anno precedente"
+                  value={menMetrics.margin !== null ? menMetrics.margin.toFixed(1) : "N/D"}
+                  suffix={menMetrics.margin !== null ? "%" : ""}
+                  change={menMetrics.margin !== null ? menMarginYoY.change : undefined}
+                  changeType={menMetrics.margin !== null ? menMarginYoY.changeType : "neutral"}
+                  description={menMetrics.margin !== null ? "Variazione vs anno precedente" : "Carica inventario"}
                 />
               );
             })()}
