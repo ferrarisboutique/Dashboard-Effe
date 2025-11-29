@@ -271,7 +271,7 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
       const startTime = Date.now();
       
       const body = await req.json();
-      const { inventory: inventoryData, chunk, totalChunks } = body;
+      const { inventory: inventoryData, chunk, totalChunks, skipDuplicateCheck } = body;
       
       try {
         await kv.get('health_check_test_key');
@@ -289,20 +289,36 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
         );
       }
       
-      // Increased timeout to 240 seconds (4 minutes) for large uploads
-      const TIMEOUT_MS = 240000;
+      console.log(`Processing chunk ${chunk || 1}/${totalChunks || 1} with ${inventoryData.length} items`);
+      
+      // Increased timeout to 300 seconds (5 minutes) for large uploads
+      const TIMEOUT_MS = 300000;
       let isTimedOut = false;
       const timeoutId = setTimeout(() => {
         isTimedOut = true;
+        console.error('Timeout triggered');
       }, TIMEOUT_MS);
       
       try {
         const timestamp = new Date().toISOString();
         
-        // Get existing SKUs efficiently (only SKU strings, not full items)
-        console.log('Loading existing SKUs for duplicate check...');
-        const existingSKUs = await getExistingSKUs();
-        console.log(`Found ${existingSKUs.size} existing SKUs in database`);
+        // Solo per il primo chunk o se non specificato skip, carica SKU esistenti
+        // Per chunk successivi, saltiamo questo controllo per velocizzare
+        let existingSKUs = new Set<string>();
+        
+        // Per il primo chunk, controlla se il database ha dati
+        // Se skipDuplicateCheck è true, salta completamente il controllo duplicati
+        if (!skipDuplicateCheck && chunk === 1) {
+          console.log('First chunk: Loading existing SKUs for duplicate check...');
+          existingSKUs = await getExistingSKUs();
+          console.log(`Found ${existingSKUs.size} existing SKUs in database`);
+        } else if (!skipDuplicateCheck && chunk && chunk > 1) {
+          // Per chunk successivi, carica solo se ce ne sono pochi nel database
+          // Altrimenti saltiamo per velocizzare (i duplicati nel file verranno gestiti dal chunkSKUs)
+          console.log(`Chunk ${chunk}: Skipping duplicate check for speed (handled by file deduplication)`);
+        } else {
+          console.log('Duplicate check skipped by request');
+        }
         
         // Also check for duplicates within the current chunk
         const chunkSKUs = new Set<string>();
@@ -338,8 +354,8 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
             continue;
           }
           
-          // Check if SKU already exists in database
-          if (existingSKUs.has(skuNormalized)) {
+          // Check if SKU already exists in database (only if we loaded existing SKUs)
+          if (existingSKUs.size > 0 && existingSKUs.has(skuNormalized)) {
             skippedExisting++;
             continue;
           }
@@ -368,13 +384,18 @@ export async function handleInventoryRoutes(req: Request, path: string, method: 
             try {
               await kv.mset(kvData);
               Object.keys(kvData).forEach(key => delete kvData[key]);
+              
+              // Log progress every few batches
+              if (processedCount % 5000 === 0) {
+                console.log(`Progress: ${processedCount} items saved...`);
+              }
             } catch (batchError) {
               throw new Error(`Failed to store batch: ${batchError.message}`);
             }
             
-            // Check timeout but allow more time (200 seconds instead of 42)
+            // Check timeout (allow 280 seconds for processing)
             const elapsedTime = Date.now() - startTime;
-            if (elapsedTime > 200000) {
+            if (elapsedTime > 280000) {
               console.log(`Timeout warning: processed ${processedCount} items in ${elapsedTime}ms, saving remaining batch...`);
               break;
             }

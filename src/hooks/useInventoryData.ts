@@ -186,7 +186,8 @@ export function useInventoryData(autoLoad: boolean = true) {
       setLoading(true);
       setError(null);
 
-      const CHUNK_SIZE = 5000;
+      // Chunk size ottimizzato per grandi inventari
+      const CHUNK_SIZE = 3000;
       const chunks = [];
       for (let i = 0; i < inventoryData.length; i += CHUNK_SIZE) {
         chunks.push(inventoryData.slice(i, i + CHUNK_SIZE));
@@ -195,7 +196,10 @@ export function useInventoryData(autoLoad: boolean = true) {
       const totalChunks = chunks.length;
       let processedCount = 0;
       let totalSkippedDuplicates = 0;
+      let totalSkippedExisting = 0;
       let allResults = [];
+      
+      console.log(`Starting upload of ${inventoryData.length} items in ${totalChunks} chunks`);
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
@@ -208,13 +212,15 @@ export function useInventoryData(autoLoad: boolean = true) {
         while (!success && retryCount <= maxRetries) {
           try {
             if (retryCount > 0) {
-              await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+              console.log(`Retry ${retryCount} for chunk ${chunkNumber}`);
+              await new Promise(resolve => setTimeout(resolve, 3000 * retryCount));
             }
             
             const controller = new AbortController();
+            // Timeout aumentato a 180 secondi per gestire grandi inventari
             const timeoutId = setTimeout(() => {
               controller.abort();
-            }, 25000);
+            }, 180000);
             
             const response = await fetch(
               `${API_BASE_URL}/inventory`,
@@ -257,23 +263,37 @@ export function useInventoryData(autoLoad: boolean = true) {
         
         processedCount += result.count || 0;
         totalSkippedDuplicates += result.skippedDuplicates || 0;
+        totalSkippedExisting += result.skippedExisting || 0;
         
         const progress = (chunkNumber / totalChunks) * 100;
         onProgress?.(progress);
         
+        console.log(`Chunk ${chunkNumber}/${totalChunks} completed: ${result.count} items saved`);
+        
+        // Delay tra chunk per non sovraccaricare il server
         if (i < chunks.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
       
+      // Ricarica inventario dopo upload completato
       await refreshInventory();
+      
+      let message = `${processedCount} inventory items uploaded successfully in ${totalChunks} chunks`;
+      if (totalSkippedDuplicates > 0) {
+        message += ` (${totalSkippedDuplicates} duplicati nel file ignorati)`;
+      }
+      if (totalSkippedExisting > 0) {
+        message += ` (${totalSkippedExisting} già esistenti ignorati)`;
+      }
       
       const finalResult = {
         success: true,
         count: processedCount,
         skippedDuplicates: totalSkippedDuplicates,
+        skippedExisting: totalSkippedExisting,
         chunks: totalChunks,
-        message: `${processedCount} inventory items uploaded successfully in ${totalChunks} chunks`
+        message
       };
       
       return { success: true, result: finalResult };
