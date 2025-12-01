@@ -109,12 +109,11 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
   }, [uploadResult, onSalesUploaded, onReturnsUploaded]);
 
   const totalSales = uploadResult?.sales?.reduce((sum, s) => sum + s.amount, 0) || 0;
-  // FIX v3: Calcola la somma netta dei resi (articoli negativi + trattenute positive)
-  const returnsSum = uploadResult?.returns?.reduce((sum, r) => {
-    console.log(`Reso: amount=${r.amount}, sku=${r.sku || 'trattenuta'}`);
-    return sum + r.amount;
-  }, 0) || 0;
-  console.log(`Somma resi: ${returnsSum}, Totale resi (abs): ${Math.abs(returnsSum)}`);
+  // Calcola la somma netta dei resi:
+  // - Articoli resi: negativi (rimborsi)
+  // - Spese di reso (trattenute): positivi (riducono il rimborso)
+  // - Spese trasporto (rimborso spedizione): negativi (aumentano il rimborso)
+  const returnsSum = uploadResult?.returns?.reduce((sum, r) => sum + r.amount, 0) || 0;
   const totalReturns = Math.abs(returnsSum);
   const netAmount = totalSales - totalReturns;
 
