@@ -109,7 +109,9 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
   }, [uploadResult, onSalesUploaded, onReturnsUploaded]);
 
   const totalSales = uploadResult?.sales?.reduce((sum, s) => sum + s.amount, 0) || 0;
-  const totalReturns = uploadResult?.returns?.reduce((sum, r) => sum + Math.abs(r.amount), 0) || 0;
+  // Somma tutti gli amount dei resi (negativi per articoli, positivi per trattenute)
+  // poi prende il valore assoluto della somma totale
+  const totalReturns = Math.abs(uploadResult?.returns?.reduce((sum, r) => sum + r.amount, 0) || 0);
   const netAmount = totalSales - totalReturns;
 
   return (
