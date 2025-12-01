@@ -240,10 +240,12 @@ export function validateAndProcessEcommerceData(
     // Determine channel
     const channel = determineChannel(paymentMethod, supplierPlatform, paymentMappings);
     
-    // Extract shipping cost (only for sales, once per transaction)
+    // Extract shipping cost (once per transaction)
+    // Per vendite: si aggiunge al totale
+    // Per resi: è un rimborso spedizione al cliente (aumenta l'importo del reso)
     let shippingCost: number | undefined = undefined;
     const shippingField = firstRow['Spese trasporto'] || firstRow['Spese traspc'];
-    if (!isReturnDoc && shippingField) {
+    if (shippingField) {
       const shipping = parseNumber(shippingField, 'Spese trasporto', 0);
       if (shipping !== null && shipping > 0) {
         shippingCost = shipping;
@@ -332,9 +334,16 @@ export function validateAndProcessEcommerceData(
           }
         }
         
-        // Add shipping cost only to first row of sales transaction
-        if (!isReturnDoc && shippingCost && rowIndex === 0) {
-          amount += shippingCost;
+        // Add shipping cost to first row of transaction
+        if (shippingCost && rowIndex === 0) {
+          if (isReturnDoc) {
+            // Per resi: spese trasporto sono un RIMBORSO al cliente (aumentano il reso)
+            // Es: articolo €220 + rimborso spedizione €10 = totale reso €230
+            amount -= shippingCost; // Negativo perché aumenta l'importo del rimborso
+          } else {
+            // Per vendite: spese trasporto si aggiungono
+            amount += shippingCost;
+          }
         }
         
         // Extract tax rate
