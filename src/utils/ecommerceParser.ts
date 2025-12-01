@@ -321,9 +321,15 @@ export function validateAndProcessEcommerceData(
         // Calculate amount
         let amount = quantity * price;
         if (isReturnDoc) {
-          // For return shipping deductions (negative price input), keep as negative deduction
-          // For returned items (positive price input), make amount negative
-          amount = -amount; // All returns are negative
+          if (isReturnShippingDeduction) {
+            // Trattenuta (prezzo negativo input): è un importo POSITIVO che riduce il reso
+            // Es: articolo reso €120, trattenuta -€10 → totale reso = €110
+            // L'articolo reso sarà -120, la trattenuta sarà +10, totale = -110 ✓
+            amount = +amount; // Positive - reduces the return amount
+          } else {
+            // Articolo reso (prezzo positivo): è un importo negativo (rimborso)
+            amount = -amount; // Negative - the actual return/refund
+          }
         }
         
         // Add shipping cost only to first row of sales transaction
@@ -394,12 +400,14 @@ export function validateAndProcessEcommerceData(
             channel,
             sku: sku || undefined,
             quantity,
-            price: -price, // Already absolute, make negative for return
+            // Per trattenute (isReturnShippingDeduction): prezzo positivo (riduce il reso)
+            // Per articoli resi: prezzo negativo (è un rimborso)
+            price: isReturnShippingDeduction ? price : -price,
             amount,
             paymentMethod,
             orderReference,
-            // If original price was negative, it's a return shipping deduction
-            returnShippingCost: isReturnShippingDeduction ? -price : undefined,
+            // If original price was negative, it's a return shipping deduction (stored as positive)
+            returnShippingCost: isReturnShippingDeduction ? price : undefined,
             taxRate,
             reason: documento
           });
