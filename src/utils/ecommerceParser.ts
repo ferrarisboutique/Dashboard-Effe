@@ -369,21 +369,23 @@ export function validateAndProcessEcommerceData(
         // Handle "Spese di reso" as separate return line
         const itemDescription = (row['Item Description'] || row.Articolo || '').toString().trim();
         if (isReturnDoc && itemDescription.toLowerCase().includes('spese di reso')) {
-          // This is a return shipping cost line
+          // This is a return shipping cost line - POSITIVO perché RIDUCE il reso
+          // Es: reso €120, spese reso €10 → netto €110 = -120 + 10 = -110
           const returnShipping = parseNumber(priceField, 'Spese di reso', rowNumber);
           if (returnShipping !== null) {
+            const shippingAmount = Math.abs(returnShipping); // Sempre positivo (riduce il reso)
             processedReturns.push({
               date,
               country,
               area,
               channel,
-              sku: undefined, // No SKU for shipping costs
+              sku: 'SPE-RESO', // SKU identificativo per spese reso
               quantity: 1,
-              price: -Math.abs(returnShipping),
-              amount: -Math.abs(returnShipping),
+              price: shippingAmount,
+              amount: shippingAmount, // POSITIVO - riduce l'importo totale del reso
               paymentMethod,
               orderReference,
-              returnShippingCost: -Math.abs(returnShipping),
+              returnShippingCost: shippingAmount,
               taxRate,
               reason: documento
             });
