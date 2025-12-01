@@ -295,18 +295,35 @@ export function validateAndProcessEcommerceData(
         
         // Debug: log the field value if parsing fails
         const priceParsed = parseNumber(priceField, 'Prezzo', rowNumber);
-        if (priceParsed === null || priceParsed <= 0) {
+        
+        // For returns: accept negative prices (they are return shipping deductions)
+        // For sales: reject prices <= 0
+        if (priceParsed === null) {
           const fieldValue = priceField !== undefined ? `"${priceField}"` : 'campo non trovato';
           const availableFields = Object.keys(row).join(', ');
           errors.push(`Riga ${rowNumber} (${documento} ${numero}): Prezzo non valido. Valore: ${fieldValue}. Campi disponibili: ${availableFields}`);
           continue;
         }
-        const price = priceParsed;
         
-        // Calculate amount (negative for returns)
+        // For sales, price must be positive
+        if (!isReturnDoc && priceParsed <= 0) {
+          const fieldValue = priceField !== undefined ? `"${priceField}"` : 'campo non trovato';
+          const availableFields = Object.keys(row).join(', ');
+          errors.push(`Riga ${rowNumber} (${documento} ${numero}): Prezzo non valido per vendita (deve essere > 0). Valore: ${fieldValue}. Campi disponibili: ${availableFields}`);
+          continue;
+        }
+        
+        // For returns with negative price (return shipping deduction), treat as deduction
+        // For returns with positive price (returned item), treat as negative amount
+        const price = Math.abs(priceParsed); // Store absolute value
+        const isReturnShippingDeduction = isReturnDoc && priceParsed < 0;
+        
+        // Calculate amount
         let amount = quantity * price;
         if (isReturnDoc) {
-          amount = -Math.abs(amount); // Ensure negative
+          // For return shipping deductions (negative price input), keep as negative deduction
+          // For returned items (positive price input), make amount negative
+          amount = -amount; // All returns are negative
         }
         
         // Add shipping cost only to first row of sales transaction
@@ -377,10 +394,12 @@ export function validateAndProcessEcommerceData(
             channel,
             sku: sku || undefined,
             quantity,
-            price: -Math.abs(price), // Ensure negative
+            price: -price, // Already absolute, make negative for return
             amount,
             paymentMethod,
             orderReference,
+            // If original price was negative, it's a return shipping deduction
+            returnShippingCost: isReturnShippingDeduction ? -price : undefined,
             taxRate,
             reason: documento
           });
