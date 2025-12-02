@@ -93,8 +93,11 @@ export function getYoYForRange(sales: Sale[], start: string, end: string) {
 
 export function calculateMetrics(sales: Sale[], returns: Return[], inventory: InventoryItem[]): DashboardMetrics {
   const totalSalesAmount = sales.reduce((sum, sale) => sum + sale.amount, 0);
-  // I resi hanno amount negativo nel DB, usiamo Math.abs() per visualizzarli come positivi
-  const totalReturns = returns.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
+  // I resi hanno amount misti:
+  // - Articoli resi: negativi (rimborsi)
+  // - Trattenute (spese di reso): positivi (riducono il rimborso)
+  // Prendiamo il valore assoluto della SOMMA, non la somma dei valori assoluti
+  const totalReturns = Math.abs(returns.reduce((sum, ret) => sum + ret.amount, 0));
   const returnRate = totalSalesAmount > 0 ? (totalReturns / totalSalesAmount) * 100 : 0;
 
   // Calculate margin based on purchase prices from inventory
@@ -545,7 +548,8 @@ export function getReturnRateByCountry(sales: Sale[], returns: Return[]) {
 
   const returnsByCountry = returns.reduce((acc, ret) => {
     const country = ret.country || 'Unknown';
-    acc[country] = (acc[country] || 0) + Math.abs(ret.amount); // Returns are negative
+    // Somma gli amount (negativi per articoli resi, positivi per trattenute)
+    acc[country] = (acc[country] || 0) + ret.amount;
     return acc;
   }, {} as Record<string, number>);
 

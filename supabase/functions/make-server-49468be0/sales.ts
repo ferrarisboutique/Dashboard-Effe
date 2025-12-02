@@ -680,8 +680,11 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
         
         existingReturnSignatures.add(returnSignature);
         
-        // Ensure amount is negative
-        const amount = ret.amount < 0 ? ret.amount : -Math.abs(ret.amount);
+        // Keep amount as-is from frontend:
+        // - Articoli resi: negativi (rimborsi)
+        // - Spese di reso (trattenute): positivi (riducono il rimborso)
+        // - Rimborso spedizione: negativi (aumentano il rimborso)
+        const amount = ret.amount;
         
         const returnId = `return_${timestamp}_${index}`;
         returnsToSave[returnId] = {
