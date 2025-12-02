@@ -123,7 +123,12 @@ function parseDate(dateValue: any, rowNumber: number): string | null {
 function isReturn(documento: string | undefined): boolean {
   if (!documento) return false;
   const doc = documento.toUpperCase().trim();
-  return doc === 'RESO' || doc === 'NOTA CRED' || doc === 'NOTA DI CREDITO';
+  // Riconosce: RESO, NOTA CRED, NOTA CREDITO, NOTA DI CREDITO
+  return doc === 'RESO' || 
+         doc === 'NOTA CRED' || 
+         doc === 'NOTA CREDITO' || 
+         doc === 'NOTA DI CREDITO' ||
+         doc.startsWith('NOTA CRED'); // Cattura qualsiasi variante
 }
 
 // Helper: extract area from supplier/platform or area field
