@@ -74,6 +74,7 @@ export interface ProcessedReturnData {
   returnShippingCost?: number;
   taxRate?: number;
   reason?: string; // "RESO" o "NOTA CRED"
+  numero?: string; // Numero documento (es. "293IT")
 }
 
 export interface DuplicateInfo {

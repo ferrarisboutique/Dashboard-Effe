@@ -657,10 +657,11 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
       const normalizeSku = (s?: string) => (s || '').toString().trim().toUpperCase();
       
       // Create a Set of unique return signatures
+      // Chiave: documento_numero_data_orderReference_sku_qty_price (stesso del frontend)
       const existingReturnSignatures = new Set(
         existingReturnsData.map((r: any) => {
           const ret = r.value || r;
-          return `${ret.date}_${ret.orderReference || ret.sku}_${ret.quantity}_${ret.amount}`;
+          return `${ret.reason || ''}_${ret.numero || ''}_${ret.date}_${ret.orderReference || ''}_${ret.sku || ''}_${ret.quantity}_${ret.price}`;
         })
       );
 
@@ -671,7 +672,8 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
       
       for (let index = 0; index < returns.length; index++) {
         const ret = returns[index];
-        const returnSignature = `${ret.date}_${ret.orderReference || ret.sku}_${ret.quantity}_${ret.amount}`;
+        // Chiave identica al frontend: documento_numero_data_orderReference_sku_qty_price
+        const returnSignature = `${ret.reason || ''}_${ret.numero || ''}_${ret.date}_${ret.orderReference || ''}_${ret.sku || ''}_${ret.quantity}_${ret.price}`;
         
         if (existingReturnSignatures.has(returnSignature)) {
           skippedDuplicates++;
@@ -693,6 +695,10 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
           date: ret.date,
           amount: amount,
           reason: ret.reason || 'Reso ecommerce',
+          numero: ret.numero, // Numero documento per deduplica
+          sku: ret.sku, // SKU per deduplica
+          quantity: ret.quantity, // Quantità per deduplica
+          price: ret.price, // Prezzo per deduplica
           channel: ret.channel || 'ecommerce',
           marketplace: ret.paymentMethod || undefined,
           area: ret.area,

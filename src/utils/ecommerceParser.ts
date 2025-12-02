@@ -396,7 +396,8 @@ export function validateAndProcessEcommerceData(
               orderReference,
               returnShippingCost: shippingAmount,
               taxRate,
-              reason: documento
+              reason: documento,
+              numero: numero // Numero documento per deduplica
             });
           }
           continue;
@@ -420,7 +421,8 @@ export function validateAndProcessEcommerceData(
             // If original price was negative, it's a return shipping deduction (stored as positive)
             returnShippingCost: isReturnShippingDeduction ? price : undefined,
             taxRate,
-            reason: documento
+            reason: documento,
+            numero: numero // Numero documento per deduplica
           });
         } else {
           processedSales.push({
