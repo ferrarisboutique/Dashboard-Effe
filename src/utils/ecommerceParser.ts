@@ -267,10 +267,15 @@ export function validateAndProcessEcommerceData(
         
         // Extract quantity
         const qty = row.Qty || row['Qty'] || row['Quant.'] || 0;
-        const quantity = typeof qty === 'number' ? qty : parseNumber(qty, 'Quantità', rowNumber) || 0;
+        let quantity = typeof qty === 'number' ? qty : parseNumber(qty, 'Quantità', rowNumber) || 0;
+        // Per resi/note credito: se quantità non valida, usa default 1
         if (quantity <= 0) {
-          errors.push(`Riga ${rowNumber} (${documento} ${numero}): Quantità non valida`);
-          continue;
+          if (isReturnDoc) {
+            quantity = 1; // Default per resi/note credito
+          } else {
+            errors.push(`Riga ${rowNumber} (${documento} ${numero}): Quantità non valida`);
+            continue;
+          }
         }
         
         // Extract price (try multiple possible field names)
