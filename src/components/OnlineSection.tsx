@@ -74,7 +74,8 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
   marketplaceReturns.forEach(ret => {
     const marketplace = ret.marketplace || 'Altro';
     if (marketplaceBreakdown[marketplace]) {
-      marketplaceBreakdown[marketplace].returns += ret.amount;
+      // I resi hanno amount negativo, usiamo Math.abs() per visualizzarli come positivi
+      marketplaceBreakdown[marketplace].returns += Math.abs(ret.amount);
     }
   });
 
@@ -170,7 +171,8 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
                 customEnd,
                 (s) => {
                   const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'ecommerce'), dateRange, customStart, customEnd);
-                  return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  // I resi hanno amount negativo, usiamo Math.abs() per visualizzarli come positivi
+                  return filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
                 }
               );
               return (
@@ -193,7 +195,8 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
                 (s) => {
                   const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'ecommerce'), dateRange, customStart, customEnd);
                   const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
-                  const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  // I resi hanno amount negativo, usiamo Math.abs() per il calcolo della percentuale
+                  const totalReturns = filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
                   return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
                 }
               );
@@ -285,7 +288,8 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
                 customEnd,
                 (s) => {
                   const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'marketplace'), dateRange, customStart, customEnd);
-                  return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  // I resi hanno amount negativo, usiamo Math.abs() per visualizzarli come positivi
+                  return filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
                 }
               );
               return (
@@ -308,7 +312,8 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
                 (s) => {
                   const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'marketplace'), dateRange, customStart, customEnd);
                   const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
-                  const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  // I resi hanno amount negativo, usiamo Math.abs() per il calcolo della percentuale
+                  const totalReturns = filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
                   return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
                 }
               );

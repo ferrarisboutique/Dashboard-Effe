@@ -331,7 +331,7 @@ export function EcommerceDataUpload({ onSalesUploaded, onReturnsUploaded, paymen
                                 <TableCell>{ret.area || '-'}</TableCell>
                                 <TableCell>{ret.quantity}</TableCell>
                                 <TableCell>€{Math.abs(ret.price).toFixed(2)}</TableCell>
-                                <TableCell className="font-medium text-red-600">€{ret.amount.toFixed(2)}</TableCell>
+                                <TableCell className="font-medium text-red-600">€{Math.abs(ret.amount).toFixed(2)}</TableCell>
                                 <TableCell>{ret.reason || '-'}</TableCell>
                               </TableRow>
                             ))}

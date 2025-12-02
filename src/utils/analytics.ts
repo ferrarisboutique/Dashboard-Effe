@@ -93,7 +93,8 @@ export function getYoYForRange(sales: Sale[], start: string, end: string) {
 
 export function calculateMetrics(sales: Sale[], returns: Return[], inventory: InventoryItem[]): DashboardMetrics {
   const totalSalesAmount = sales.reduce((sum, sale) => sum + sale.amount, 0);
-  const totalReturns = returns.reduce((sum, ret) => sum + ret.amount, 0);
+  // I resi hanno amount negativo nel DB, usiamo Math.abs() per visualizzarli come positivi
+  const totalReturns = returns.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
   const returnRate = totalSalesAmount > 0 ? (totalReturns / totalSalesAmount) * 100 : 0;
 
   // Calculate margin based on purchase prices from inventory

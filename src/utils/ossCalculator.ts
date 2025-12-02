@@ -100,7 +100,8 @@ export function calculateVATByCountry(
     if (!ossCountry) continue;
 
     const salesAmount = data.sales.reduce((sum, s) => sum + s.amount, 0);
-    const returnsAmount = Math.abs(data.returns.reduce((sum, r) => r.amount, 0)); // Returns are negative
+    // I resi hanno amount negativo, usiamo Math.abs() per ogni reso
+    const returnsAmount = data.returns.reduce((sum, r) => sum + Math.abs(r.amount), 0);
     const baseAmount = salesAmount - returnsAmount;
     const vatRate = ossCountry.vatRate;
     const vatAmount = (baseAmount * vatRate) / 100;

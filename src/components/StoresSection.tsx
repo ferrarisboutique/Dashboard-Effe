@@ -188,7 +188,8 @@ export function StoresSection({ sales, returns, inventory, dateRange, customStar
                 customEnd,
                 (s) => {
                   const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'negozio_donna'), dateRange, customStart, customEnd);
-                  return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  // I resi hanno amount negativo, usiamo Math.abs() per visualizzarli come positivi
+                  return filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
                 }
               );
               return (
@@ -211,7 +212,8 @@ export function StoresSection({ sales, returns, inventory, dateRange, customStar
                 (s) => {
                   const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'negozio_donna'), dateRange, customStart, customEnd);
                   const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
-                  const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  // I resi hanno amount negativo, usiamo Math.abs() per il calcolo della percentuale
+                  const totalReturns = filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
                   return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
                 }
               );
@@ -318,7 +320,8 @@ export function StoresSection({ sales, returns, inventory, dateRange, customStar
                 customEnd,
                 (s) => {
                   const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'negozio_uomo'), dateRange, customStart, customEnd);
-                  return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  // I resi hanno amount negativo, usiamo Math.abs() per visualizzarli come positivi
+                  return filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
                 }
               );
               return (
@@ -341,7 +344,8 @@ export function StoresSection({ sales, returns, inventory, dateRange, customStar
                 (s) => {
                   const filtered = filterDataByDateAdvanced(returns.filter(r => r.channel === 'negozio_uomo'), dateRange, customStart, customEnd);
                   const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
-                  const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+                  // I resi hanno amount negativo, usiamo Math.abs() per il calcolo della percentuale
+                  const totalReturns = filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
                   return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
                 }
               );

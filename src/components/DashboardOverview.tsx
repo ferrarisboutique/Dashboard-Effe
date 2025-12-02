@@ -31,12 +31,14 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, custom
   const totalSalesYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => s.reduce((sum, sale) => sum + sale.amount, 0));
   const totalReturnsYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
     const filtered = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
-    return filtered.reduce((sum, ret) => sum + ret.amount, 0);
+    // I resi hanno amount negativo, usiamo Math.abs() per visualizzarli come positivi
+    return filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
   });
   const returnRateYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
     const filtered = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
     const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
-    const totalReturns = filtered.reduce((sum, ret) => sum + ret.amount, 0);
+    // I resi hanno amount negativo, usiamo Math.abs() per il calcolo della percentuale
+    const totalReturns = filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
     return totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
   });
   const marginYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
