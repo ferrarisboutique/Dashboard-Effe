@@ -585,7 +585,8 @@ export default function App() {
       case 'analytics':
         return (
           <AnalyticsSection 
-            sales={salesWithMappings} 
+            sales={salesWithMappings}
+            returns={returns}
             paymentMappings={paymentMappings}
             dateRange={dateRange}
             customStart={customStart}
