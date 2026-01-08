@@ -223,22 +223,22 @@ export function AnalyticsSection({
 
       {/* Main Tabs */}
       <Tabs defaultValue="brand" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="brand" className="flex items-center gap-2">
+        <TabsList className="inline-flex h-auto p-1 bg-muted rounded-lg gap-1 flex-wrap sm:flex-nowrap">
+          <TabsTrigger value="brand" className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-md">
             <Tag className="w-4 h-4" />
-            Brand
+            <span>Brand</span>
           </TabsTrigger>
-          <TabsTrigger value="countries" className="flex items-center gap-2">
+          <TabsTrigger value="countries" className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-md">
             <Globe className="w-4 h-4" />
-            Paesi
+            <span>Paesi</span>
           </TabsTrigger>
-          <TabsTrigger value="channels" className="flex items-center gap-2">
+          <TabsTrigger value="channels" className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-md">
             <Store className="w-4 h-4" />
-            Canali
+            <span>Canali</span>
           </TabsTrigger>
-          <TabsTrigger value="documents" className="flex items-center gap-2">
+          <TabsTrigger value="documents" className="flex items-center gap-2 px-4 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-md">
             <FileText className="w-4 h-4" />
-            Documenti
+            <span>Documenti</span>
           </TabsTrigger>
         </TabsList>
 
