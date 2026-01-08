@@ -13,7 +13,6 @@ import {
 } from "../utils/analyticsCalculator";
 import { 
   BarChart3, 
-  Calendar, 
   ChevronRight, 
   ChevronDown, 
   Receipt, 
@@ -24,7 +23,6 @@ import {
   Tag
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { DateRangeFilter } from "./DateRangeFilter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -42,16 +40,10 @@ export function AnalyticsSection({
   sales, 
   returns,
   paymentMappings, 
-  dateRange: globalDateRange = "all", 
-  customStart: globalCustomStart, 
-  customEnd: globalCustomEnd 
+  dateRange = "all", 
+  customStart, 
+  customEnd 
 }: AnalyticsSectionProps) {
-  // Local date filter state
-  const [localDateRange, setLocalDateRange] = useState<string>(globalDateRange);
-  const [localCustomStart, setLocalCustomStart] = useState<string | undefined>(globalCustomStart);
-  const [localCustomEnd, setLocalCustomEnd] = useState<string | undefined>(globalCustomEnd);
-  const [hasLocalOverride, setHasLocalOverride] = useState(false);
-
   // Brand tab state
   const [selectedBrand, setSelectedBrand] = useState<string>('');
 
@@ -60,27 +52,14 @@ export function AnalyticsSection({
   const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
   const [expandedDocTypes, setExpandedDocTypes] = useState<Set<string>>(new Set());
 
-  // Sync with global filter when it changes
-  React.useEffect(() => {
-    if (!hasLocalOverride) {
-      setLocalDateRange(globalDateRange);
-      setLocalCustomStart(globalCustomStart);
-      setLocalCustomEnd(globalCustomEnd);
-    }
-  }, [globalDateRange, globalCustomStart, globalCustomEnd, hasLocalOverride]);
-
-  const activeDateRange = localDateRange;
-  const activeCustomStart = localCustomStart;
-  const activeCustomEnd = localCustomEnd;
-
-  // Filter data by date
+  // Filter data by date using global filter
   const filteredSales = useMemo(() => {
-    return filterDataByDateAdvanced(sales, activeDateRange, activeCustomStart, activeCustomEnd);
-  }, [sales, activeDateRange, activeCustomStart, activeCustomEnd]);
+    return filterDataByDateAdvanced(sales, dateRange, customStart, customEnd);
+  }, [sales, dateRange, customStart, customEnd]);
 
   const filteredReturns = useMemo(() => {
-    return filterDataByDateAdvanced(returns, activeDateRange, activeCustomStart, activeCustomEnd);
-  }, [returns, activeDateRange, activeCustomStart, activeCustomEnd]);
+    return filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
+  }, [returns, dateRange, customStart, customEnd]);
 
   // Get unique brands
   const brands = useMemo(() => getUniqueBrands(filteredSales), [filteredSales]);
@@ -168,30 +147,6 @@ export function AnalyticsSection({
           <BarChart3 className="w-6 h-6" />
           Analytics
         </h2>
-        <div className="flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-muted-foreground" />
-          <DateRangeFilter
-            dateRange={localDateRange}
-            onDateRangeChange={(range) => {
-              setLocalDateRange(range);
-              setHasLocalOverride(true);
-              if (range !== 'custom') {
-                setLocalCustomStart(undefined);
-                setLocalCustomEnd(undefined);
-              }
-            }}
-            customStart={localCustomStart}
-            customEnd={localCustomEnd}
-            onCustomStartChange={(start) => {
-              setLocalCustomStart(start);
-              setHasLocalOverride(true);
-            }}
-            onCustomEndChange={(end) => {
-              setLocalCustomEnd(end);
-              setHasLocalOverride(true);
-            }}
-          />
-        </div>
       </div>
 
       {/* Summary Cards */}
