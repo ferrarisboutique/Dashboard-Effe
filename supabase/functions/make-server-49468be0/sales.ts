@@ -1326,6 +1326,111 @@ export async function handleSalesRoutes(req: Request, path: string, method: stri
       });
     }
 
+    // GET /sales/channel-costs - Get channel cost settings
+    if (path === '/sales/channel-costs' && method === 'GET') {
+      try {
+        const costs: Record<string, {
+          paymentMethod: string;
+          macroArea: string;
+          commissionPercent?: number;
+          extraCommissionPercent?: number;
+          fixedCost?: number;
+          returnCost?: number;
+          applyOnVatIncluded: boolean;
+        }> = {};
+        
+        const allKeys = await kv.getByPrefix('channel_cost_');
+        
+        for (const item of allKeys) {
+          const key = item.key;
+          const paymentMethod = key.replace('channel_cost_', '');
+          const costData = item.value || {};
+          costs[paymentMethod] = {
+            paymentMethod,
+            macroArea: costData.macroArea || 'Altro',
+            commissionPercent: costData.commissionPercent,
+            extraCommissionPercent: costData.extraCommissionPercent,
+            fixedCost: costData.fixedCost,
+            returnCost: costData.returnCost,
+            applyOnVatIncluded: costData.applyOnVatIncluded ?? true
+          };
+        }
+        
+        return jsonResponse({
+          success: true,
+          costs
+        });
+      } catch (error) {
+        const errorDetails = error instanceof Error ? error.message : String(error);
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Failed to load channel costs',
+            details: errorDetails
+          },
+          500
+        );
+      }
+    }
+
+    // POST /sales/channel-costs - Save channel cost settings
+    if (path === '/sales/channel-costs' && method === 'POST') {
+      try {
+        const body = await req.json();
+        const { costs } = body;
+        
+        if (!costs || typeof costs !== 'object') {
+          return jsonResponse(
+            {
+              success: false,
+              error: 'Invalid costs data'
+            },
+            400
+          );
+        }
+        
+        const costData: Record<string, any> = {};
+        for (const [paymentMethod, cost] of Object.entries(costs)) {
+          const costObj = cost as {
+            macroArea?: string;
+            commissionPercent?: number;
+            extraCommissionPercent?: number;
+            fixedCost?: number;
+            returnCost?: number;
+            applyOnVatIncluded?: boolean;
+          };
+          
+          costData[`channel_cost_${paymentMethod}`] = {
+            macroArea: costObj.macroArea || 'Altro',
+            commissionPercent: costObj.commissionPercent,
+            extraCommissionPercent: costObj.extraCommissionPercent,
+            fixedCost: costObj.fixedCost,
+            returnCost: costObj.returnCost,
+            applyOnVatIncluded: costObj.applyOnVatIncluded ?? true
+          };
+        }
+        
+        if (Object.keys(costData).length > 0) {
+          await kv.mset(costData);
+        }
+        
+        return jsonResponse({
+          success: true,
+          message: `Saved ${Object.keys(costData).length} channel cost settings`
+        });
+      } catch (error) {
+        const errorDetails = error instanceof Error ? error.message : String(error);
+        return jsonResponse(
+          {
+            success: false,
+            error: 'Failed to save channel costs',
+            details: errorDetails
+          },
+          500
+        );
+      }
+    }
+
     // 404 for unknown sales routes
     return jsonResponse({ error: 'Sales route not found' }, 404);
   } catch (error) {

@@ -3,28 +3,56 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { SalesChart } from "./SalesChart";
 import { Sale } from "../types/dashboard";
-import { getBrandChannelDistribution } from "../utils/analytics";
-import { BarChart3 } from "lucide-react";
+import { filterDataByDateAdvanced, getBrandChannelDistribution } from "../utils/analytics";
+import { BarChart3, Calendar } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { DateRangeFilter } from "./DateRangeFilter";
 
 interface AnalyticsSectionProps {
   sales: Sale[];
   paymentMappings?: Record<string, { macroArea: string; channel: string }>;
+  dateRange?: string;
+  customStart?: string;
+  customEnd?: string;
 }
 
-export function AnalyticsSection({ sales, paymentMappings }: AnalyticsSectionProps) {
+export function AnalyticsSection({ sales, paymentMappings, dateRange: globalDateRange = "all", customStart: globalCustomStart, customEnd: globalCustomEnd }: AnalyticsSectionProps) {
   const [selectedBrand, setSelectedBrand] = useState<string>('');
+  // Local date filter state for this section (can override global filter)
+  const [localDateRange, setLocalDateRange] = useState<string>(globalDateRange);
+  const [localCustomStart, setLocalCustomStart] = useState<string | undefined>(globalCustomStart);
+  const [localCustomEnd, setLocalCustomEnd] = useState<string | undefined>(globalCustomEnd);
+  const [hasLocalOverride, setHasLocalOverride] = useState(false);
+
+  // Sync with global filter when it changes (only if user hasn't set local override)
+  React.useEffect(() => {
+    if (!hasLocalOverride) {
+      setLocalDateRange(globalDateRange);
+      setLocalCustomStart(globalCustomStart);
+      setLocalCustomEnd(globalCustomEnd);
+    }
+  }, [globalDateRange, globalCustomStart, globalCustomEnd, hasLocalOverride]);
+
+  // Use local filter if set, otherwise fall back to global filter
+  const activeDateRange = localDateRange;
+  const activeCustomStart = localCustomStart;
+  const activeCustomEnd = localCustomEnd;
+
+  // Apply date filter to sales specifically for this section
+  const filteredSales = useMemo(() => {
+    return filterDataByDateAdvanced(sales, activeDateRange, activeCustomStart, activeCustomEnd);
+  }, [sales, activeDateRange, activeCustomStart, activeCustomEnd]);
 
   // Get all unique brands
   const brands = useMemo(() => {
     const brandSet = new Set<string>();
-    sales.forEach(sale => {
+    filteredSales.forEach(sale => {
       if (sale.brand && sale.brand !== 'Unknown') {
         brandSet.add(sale.brand);
       }
     });
     return Array.from(brandSet).sort();
-  }, [sales]);
+  }, [filteredSales]);
 
   // Set first brand as default
   React.useEffect(() => {
@@ -36,8 +64,8 @@ export function AnalyticsSection({ sales, paymentMappings }: AnalyticsSectionPro
   // Calculate distribution for selected brand
   const distribution = useMemo(() => {
     if (!selectedBrand) return null;
-    return getBrandChannelDistribution(sales, selectedBrand, paymentMappings);
-  }, [sales, selectedBrand, paymentMappings]);
+    return getBrandChannelDistribution(filteredSales, selectedBrand, paymentMappings);
+  }, [filteredSales, selectedBrand, paymentMappings]);
 
   if (brands.length === 0) {
     return (
@@ -57,11 +85,37 @@ export function AnalyticsSection({ sales, paymentMappings }: AnalyticsSectionPro
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="flex items-center gap-2 mb-6">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2">
           <BarChart3 className="w-6 h-6" />
           Analytics - Distribuzione Brand per Canale
         </h2>
+        {/* Date Filter for Analytics Section */}
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-muted-foreground" />
+          <DateRangeFilter
+            dateRange={localDateRange}
+            onDateRangeChange={(range) => {
+              setLocalDateRange(range);
+              setHasLocalOverride(true);
+              // Reset custom dates when switching away from custom
+              if (range !== 'custom') {
+                setLocalCustomStart(undefined);
+                setLocalCustomEnd(undefined);
+              }
+            }}
+            customStart={localCustomStart}
+            customEnd={localCustomEnd}
+            onCustomStartChange={(start) => {
+              setLocalCustomStart(start);
+              setHasLocalOverride(true);
+            }}
+            onCustomEndChange={(end) => {
+              setLocalCustomEnd(end);
+              setHasLocalOverride(true);
+            }}
+          />
+        </div>
       </div>
 
       {/* Brand Selector */}

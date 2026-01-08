@@ -1,6 +1,43 @@
-import { Sale, Return, DashboardMetrics } from '../types/dashboard';
+import { Sale, Return, DashboardMetrics, ChannelCostSettings, MarketplaceMetrics } from '../types/dashboard';
 import { InventoryItem } from '../types/inventory';
 import { normalizeSku } from './normalize';
+
+// Helper: Calculate commission cost for a sale based on channel costs
+export function calculateSaleCommission(
+  sale: Sale,
+  channelCosts?: Record<string, ChannelCostSettings>
+): number {
+  if (!channelCosts || !sale.paymentMethod) return 0;
+  
+  const costSettings = channelCosts[sale.paymentMethod];
+  if (!costSettings) return 0;
+  
+  let commission = 0;
+  let baseAmount = sale.amount;
+  
+  // If applyOnVatIncluded is false, calculate on VAT-excluded amount
+  if (!costSettings.applyOnVatIncluded && sale.taxRate && sale.taxRate > 0) {
+    // Scorporare IVA: prezzo_netto = prezzo_lordo / (1 + taxRate/100)
+    baseAmount = sale.amount / (1 + sale.taxRate / 100);
+  }
+  
+  // Commission percentage
+  if (costSettings.commissionPercent && costSettings.commissionPercent > 0) {
+    commission += baseAmount * (costSettings.commissionPercent / 100);
+  }
+  
+  // Extra commission percentage
+  if (costSettings.extraCommissionPercent && costSettings.extraCommissionPercent > 0) {
+    commission += baseAmount * (costSettings.extraCommissionPercent / 100);
+  }
+  
+  // Fixed cost per transaction
+  if (costSettings.fixedCost && costSettings.fixedCost > 0) {
+    commission += costSettings.fixedCost;
+  }
+  
+  return commission;
+}
 
 // Filter data by date range
 export function filterDataByDateRange<T extends { date: string }>(data: T[], dateRange: string): T[] {
@@ -91,7 +128,12 @@ export function getYoYForRange(sales: Sale[], start: string, end: string) {
   return { current, previous, changePct };
 }
 
-export function calculateMetrics(sales: Sale[], returns: Return[], inventory: InventoryItem[]): DashboardMetrics {
+export function calculateMetrics(
+  sales: Sale[], 
+  returns: Return[], 
+  inventory: InventoryItem[],
+  channelCosts?: Record<string, ChannelCostSettings>
+): DashboardMetrics {
   const totalSalesAmount = sales.reduce((sum, sale) => sum + sale.amount, 0);
   // I resi hanno amount misti:
   // - Articoli resi: negativi (rimborsi)
@@ -113,6 +155,7 @@ export function calculateMetrics(sales: Sale[], returns: Return[], inventory: In
   let matchedSalesCount = 0;
   let matchedSalesAmount = 0;
   let totalCost = 0;
+  let totalCommissions = 0;
   
   sales.forEach(sale => {
     const saleSku = normalizeSku((sale as any).sku || sale.productId);
@@ -122,6 +165,8 @@ export function calculateMetrics(sales: Sale[], returns: Return[], inventory: In
       matchedSalesCount++;
       matchedSalesAmount += sale.amount;
       totalCost += inventoryItem.purchasePrice * sale.quantity;
+      // Add commission costs if available
+      totalCommissions += calculateSaleCommission(sale, channelCosts);
     }
   });
   
@@ -132,8 +177,9 @@ export function calculateMetrics(sales: Sale[], returns: Return[], inventory: In
   
   let margin: number | null = null;
   if (hasMatches && matchedSalesAmount > 0) {
-    // Calculate margin only on matched sales (more accurate)
-    margin = ((matchedSalesAmount - totalCost) / matchedSalesAmount) * 100;
+    // Calculate margin: (venduto - costo_prodotto - commissioni) / venduto * 100
+    const netProfit = matchedSalesAmount - totalCost - totalCommissions;
+    margin = (netProfit / matchedSalesAmount) * 100;
   }
 
   const salesByChannel = {
@@ -657,4 +703,165 @@ export function getAreaByCountry(sales: Sale[]) {
   }
 
   return result.sort((a, b) => a.country.localeCompare(b.country));
+}
+
+// Get detailed metrics for each marketplace
+export function getMarketplaceDetailedMetrics(
+  sales: Sale[],
+  returns: Return[],
+  inventory: InventoryItem[],
+  channelCosts?: Record<string, ChannelCostSettings>
+): MarketplaceMetrics[] {
+  // Filter only marketplace sales
+  const marketplaceSales = sales.filter(s => s.channel === 'marketplace');
+  const marketplaceReturns = returns.filter(r => r.channel === 'marketplace');
+  
+  // Build inventory map for margin calculation
+  const inventoryMap = new Map<string, InventoryItem>();
+  inventory.forEach(item => {
+    if (item.sku) {
+      inventoryMap.set(normalizeSku(item.sku), item);
+    }
+  });
+  
+  // Group by marketplace/paymentMethod
+  const marketplaceMap = new Map<string, {
+    sales: Sale[];
+    returns: Return[];
+  }>();
+  
+  marketplaceSales.forEach(sale => {
+    // Use paymentMethod as marketplace identifier, fallback to marketplace field or 'Altro'
+    const key = sale.paymentMethod || sale.marketplace || 'Altro';
+    if (!marketplaceMap.has(key)) {
+      marketplaceMap.set(key, { sales: [], returns: [] });
+    }
+    marketplaceMap.get(key)!.sales.push(sale);
+  });
+  
+  marketplaceReturns.forEach(ret => {
+    const key = ret.marketplace || 'Altro';
+    if (marketplaceMap.has(key)) {
+      marketplaceMap.get(key)!.returns.push(ret);
+    }
+  });
+  
+  // Calculate metrics for each marketplace
+  const results: MarketplaceMetrics[] = [];
+  
+  for (const [marketplaceName, data] of marketplaceMap.entries()) {
+    const totalSales = data.sales.reduce((sum, s) => sum + s.amount, 0);
+    const orderCount = data.sales.length; // Numero righe/prodotti
+    
+    // Count UNIQUE orders (for fixed costs - applied once per order, not per product)
+    const uniqueOrders = new Set(
+      data.sales.map(s => s.orderReference || `${(s as any).documento || ''}_${(s as any).numero || ''}`)
+    );
+    const uniqueOrderCount = uniqueOrders.size;
+    
+    const totalReturns = Math.abs(data.returns.reduce((sum, r) => sum + r.amount, 0));
+    const returnCount = data.returns.length; // Numero righe reso
+    
+    // Count UNIQUE return orders (for return costs - applied once per return order)
+    const uniqueReturns = new Set(
+      data.returns.map(r => r.orderReference || `return_${r.id}`)
+    );
+    const uniqueReturnCount = uniqueReturns.size;
+    
+    const returnRate = totalSales > 0 ? (totalReturns / totalSales) * 100 : 0;
+    const totalQuantity = data.sales.reduce((sum, s) => sum + s.quantity, 0);
+    
+    // Average order value based on UNIQUE orders
+    const averageOrderValue = uniqueOrderCount > 0 ? totalSales / uniqueOrderCount : 0;
+    
+    // Get channel cost settings for this marketplace
+    const costSettings = channelCosts?.[marketplaceName];
+    const commissionPercent = costSettings?.commissionPercent || 0;
+    const extraCommissionPercent = costSettings?.extraCommissionPercent || 0;
+    const fixedCostPerOrder = costSettings?.fixedCost || 0;
+    const returnCostPerReturn = costSettings?.returnCost || 0;
+    
+    // Calculate product costs (only for matched items)
+    let totalProductCost = 0;
+    let matchedProductCount = 0;
+    
+    data.sales.forEach(sale => {
+      const saleSku = normalizeSku((sale as any).sku || sale.productId);
+      const inventoryItem = saleSku ? inventoryMap.get(saleSku) : undefined;
+      
+      if (inventoryItem && inventoryItem.purchasePrice > 0) {
+        totalProductCost += inventoryItem.purchasePrice * sale.quantity;
+        matchedProductCount++;
+      }
+    });
+    
+    // Channel costs are calculated on TOTAL SALES (these are real costs!)
+    // Commission = % of total sales
+    const totalCommissionRate = (commissionPercent + extraCommissionPercent) / 100;
+    const totalCommissions = totalSales * totalCommissionRate;
+    
+    // Fixed costs: per UNIQUE order
+    const totalFixedCosts = uniqueOrderCount * fixedCostPerOrder;
+    
+    // Return costs: per UNIQUE return order
+    const totalReturnCosts = uniqueReturnCount * returnCostPerReturn;
+    
+    // Total channel costs
+    const totalChannelCosts = totalCommissions + totalFixedCosts + totalReturnCosts;
+    
+    // Gross profit = Venduto - Costo Prodotti (solo se abbiamo i costi)
+    const grossProfit = totalSales - totalProductCost;
+    
+    // Gross margin % (before channel costs)
+    let grossMarginPercent: number | null = null;
+    if (totalProductCost > 0) {
+      grossMarginPercent = (grossProfit / totalSales) * 100;
+    }
+    
+    // Net profit = Venduto - Costo Prodotti - Costi Canale
+    const netProfit = totalSales - totalProductCost - totalChannelCosts;
+    
+    // Net margin % (after all costs)
+    let netMargin: number | null = null;
+    if (totalProductCost > 0) {
+      // Full margin calculation only if we have product costs
+      netMargin = (netProfit / totalSales) * 100;
+    }
+    
+    // "Netto da canale" = what's left after channel takes their cut (useful even without product costs)
+    const netFromChannel = totalSales - totalChannelCosts;
+    const netFromChannelPercent = totalSales > 0 ? (netFromChannel / totalSales) * 100 : 0;
+    
+    results.push({
+      name: marketplaceName,
+      totalSales,
+      orderCount,
+      uniqueOrderCount,
+      totalReturns,
+      returnCount,
+      uniqueReturnCount,
+      returnRate,
+      margin: grossMarginPercent, // For backwards compatibility
+      grossMarginPercent,
+      averageOrderValue,
+      totalQuantity,
+      // Cost breakdown
+      totalCommissions,
+      commissionPercent,
+      extraCommissionPercent,
+      totalFixedCosts,
+      totalReturnCosts,
+      totalProductCost,
+      // Profits
+      grossProfit,
+      netProfit,
+      netMargin,
+      // Net from channel (venduto - costi canale, sempre calcolabile)
+      netFromChannel,
+      netFromChannelPercent
+    });
+  }
+  
+  // Sort by total sales descending
+  return results.sort((a, b) => b.totalSales - a.totalSales);
 }

@@ -2,12 +2,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { MetricCard } from "./MetricCard";
 import { SalesChart } from "./SalesChart";
-import { Sale, Return } from "../types/dashboard";
+import { Sale, Return, ChannelCostSettings } from "../types/dashboard";
 import { InventoryItem } from "../types/inventory";
-import { calculateMetrics, getSalesByDate, getMarketplaceData, getCategoryData, getBrandData, filterDataByDateAdvanced, calculateYoYChange } from "../utils/analytics";
-import { Globe, ShoppingCart, ExternalLink, Package } from "lucide-react";
+import { calculateMetrics, getSalesByDate, getMarketplaceData, getCategoryData, getBrandData, filterDataByDateAdvanced, calculateYoYChange, getMarketplaceDetailedMetrics } from "../utils/analytics";
+import { Globe, ShoppingCart, ExternalLink, Package, TrendingUp, Percent, Euro, Settings } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { UnmappedPaymentMethodsAlert } from "./UnmappedPaymentMethodsAlert";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 
 interface OnlineSectionProps {
   sales: Sale[];
@@ -18,9 +20,10 @@ interface OnlineSectionProps {
   customEnd?: string;
   unmappedPaymentMethods?: string[];
   onNavigateToMapping?: () => void;
+  channelCosts?: Record<string, ChannelCostSettings>;
 }
 
-export function OnlineSection({ sales, returns, inventory, dateRange, customStart, customEnd, unmappedPaymentMethods = [], onNavigateToMapping }: OnlineSectionProps) {
+export function OnlineSection({ sales, returns, inventory, dateRange, customStart, customEnd, unmappedPaymentMethods = [], onNavigateToMapping, channelCosts = {} }: OnlineSectionProps) {
   // Debug logging
   console.log('OnlineSection - Total sales received:', sales.length);
   console.log('OnlineSection - Date range:', dateRange);
@@ -375,48 +378,182 @@ export function OnlineSection({ sales, returns, inventory, dateRange, customStar
             />
           </div>
 
-          {/* Marketplace Breakdown */}
+          {/* Marketplace Detailed Analysis */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Package className="w-5 h-5" />
-                Dettaglio per Marketplace
+                <TrendingUp className="w-5 h-5" />
+                Analisi Dettagliata per Marketplace
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.entries(marketplaceBreakdown).map(([marketplace, data]) => {
-                  const returnRate = data.sales > 0 ? (data.returns / data.sales) * 100 : 0;
+              {(() => {
+                const detailedMetrics = getMarketplaceDetailedMetrics(
+                  filteredSales,
+                  filteredReturns,
+                  inventory,
+                  channelCosts
+                );
+                
+                if (detailedMetrics.length === 0) {
                   return (
-                    <Card key={marketplace}>
-                      <CardContent className="pt-6">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-medium">{marketplace}</h4>
-                            <Badge variant="outline">{data.count} ordini</Badge>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Vendite:</span>
-                              <span>€{data.sales.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Resi:</span>
-                              <span>€{data.returns.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Tasso reso:</span>
-                              <span className={returnRate > 20 ? "text-red-500" : returnRate > 10 ? "text-yellow-500" : "text-green-500"}>
-                                {returnRate.toFixed(1)}%
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <p className="text-muted-foreground text-center py-4">
+                      Nessun dato marketplace disponibile.
+                    </p>
+                  );
+                }
+                
+                return (
+                  <TooltipProvider>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Marketplace</TableHead>
+                            <TableHead className="text-right">Venduto</TableHead>
+                            <TableHead className="text-right">Ordini</TableHead>
+                            <TableHead className="text-right">Costi Canale</TableHead>
+                            <TableHead className="text-right">Netto da Canale</TableHead>
+                            <TableHead className="text-right">%</TableHead>
+                            <TableHead className="text-right">Resi</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {detailedMetrics.map((mp) => {
+                            const totalChannelCosts = mp.totalCommissions + mp.totalFixedCosts + mp.totalReturnCosts;
+                            const fixedCostPerOrder = mp.uniqueOrderCount > 0 ? mp.totalFixedCosts / mp.uniqueOrderCount : 0;
+                            const returnCostPerReturn = mp.uniqueReturnCount > 0 ? mp.totalReturnCosts / mp.uniqueReturnCount : 0;
+                            const commissionRate = mp.commissionPercent + mp.extraCommissionPercent;
+                            
+                            return (
+                              <TableRow key={mp.name}>
+                                <TableCell className="font-medium">
+                                  <div className="flex flex-col">
+                                    <span>{mp.name}</span>
+                                    {commissionRate > 0 && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {commissionRate}%
+                                        {fixedCostPerOrder > 0 && ` + €${fixedCostPerOrder.toFixed(2)}/ord`}
+                                        {returnCostPerReturn > 0 && ` + €${returnCostPerReturn.toFixed(2)}/reso`}
+                                      </span>
+                                    )}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                  €{mp.totalSales.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <span>{mp.uniqueOrderCount}</span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>{mp.orderCount} prodotti</p>
+                                      <p>Media: €{mp.averageOrderValue.toLocaleString('it-IT', { minimumFractionDigits: 2 })}/ord</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {totalChannelCosts > 0 ? (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <span className="text-red-600">
+                                          -€{totalChannelCosts.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <div className="text-xs space-y-1">
+                                          <p>Commissioni ({commissionRate}%): €{mp.totalCommissions.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</p>
+                                          {mp.totalFixedCosts > 0 && (
+                                            <p>Fissi ({mp.uniqueOrderCount} × €{fixedCostPerOrder.toFixed(2)}): €{mp.totalFixedCosts.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</p>
+                                          )}
+                                          {mp.totalReturnCosts > 0 && (
+                                            <p>Resi ({mp.uniqueReturnCount} × €{returnCostPerReturn.toFixed(2)}): €{mp.totalReturnCosts.toLocaleString('it-IT', { minimumFractionDigits: 2 })}</p>
+                                          )}
+                                        </div>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-muted-foreground">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                  <span className={mp.netFromChannel >= 0 ? "text-green-600" : "text-red-600"}>
+                                    €{mp.netFromChannel.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <span className={
+                                    mp.netFromChannelPercent > 70 ? "text-green-600 font-semibold" : 
+                                    mp.netFromChannelPercent > 50 ? "text-yellow-600 font-semibold" : 
+                                    "text-red-600 font-semibold"
+                                  }>
+                                    {mp.netFromChannelPercent.toFixed(1)}%
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {mp.totalReturns > 0 ? (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <span className="text-orange-600">
+                                          €{mp.totalReturns.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{mp.uniqueReturnCount} ordini ({mp.returnRate.toFixed(1)}%)</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="text-muted-foreground">€0</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
                   );
                 })}
+                          {/* Totals Row */}
+                          <TableRow className="bg-muted/50 font-semibold border-t-2">
+                            <TableCell>TOTALE</TableCell>
+                            <TableCell className="text-right">
+                              €{detailedMetrics.reduce((sum, mp) => sum + mp.totalSales, 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {detailedMetrics.reduce((sum, mp) => sum + mp.uniqueOrderCount, 0)}
+                            </TableCell>
+                            <TableCell className="text-right text-red-600">
+                              -€{detailedMetrics.reduce((sum, mp) => sum + mp.totalCommissions + mp.totalFixedCosts + mp.totalReturnCosts, 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {(() => {
+                                const totalNet = detailedMetrics.reduce((sum, mp) => sum + mp.netFromChannel, 0);
+                                return (
+                                  <span className={totalNet >= 0 ? "text-green-600" : "text-red-600"}>
+                                    €{totalNet.toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                                  </span>
+                                );
+                              })()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {(() => {
+                                const totalSales = detailedMetrics.reduce((sum, mp) => sum + mp.totalSales, 0);
+                                const totalNet = detailedMetrics.reduce((sum, mp) => sum + mp.netFromChannel, 0);
+                                const pct = totalSales > 0 ? (totalNet / totalSales) * 100 : 0;
+                                return (
+                                  <span className={pct > 70 ? "text-green-600" : pct > 50 ? "text-yellow-600" : "text-red-600"}>
+                                    {pct.toFixed(1)}%
+                                  </span>
+                                );
+                              })()}
+                            </TableCell>
+                            <TableCell className="text-right text-orange-600">
+                              €{detailedMetrics.reduce((sum, mp) => sum + mp.totalReturns, 0).toLocaleString('it-IT', { minimumFractionDigits: 2 })}
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
               </div>
+                  </TooltipProvider>
+                );
+              })()}
             </CardContent>
           </Card>
         </TabsContent>

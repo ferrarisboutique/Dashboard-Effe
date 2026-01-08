@@ -263,12 +263,9 @@ export function validateAndProcessEcommerceData(
       const rowNumber = rowIndex + 2; // +2 for header and 0-based index
       
       try {
-        // Extract SKU (try multiple field names)
+        // Extract SKU (try multiple field names) - SKU è opzionale
         const sku = (row.SKU || row['SKU'] || '').toString().trim();
-        if (!sku && !isReturnDoc) {
-          errors.push(`Riga ${rowNumber} (${documento} ${numero}): SKU mancante`);
-          continue;
-        }
+        // SKU non è più obbligatorio - le vendite senza SKU vengono comunque importate
         
         // Extract quantity
         const qty = row.Qty || row['Qty'] || row['Quant.'] || 0;

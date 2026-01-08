@@ -3,12 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { Download, FileSpreadsheet, FileText } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, ChevronRight, ChevronDown, Receipt, RotateCcw } from "lucide-react";
 import { Sale, Return } from '../types/dashboard';
 import { calculateVATByCountry, getOSSCountries } from '../utils/ossCalculator';
 import { generateOSSFile } from '../utils/ossExport';
 import { OSSVATData } from '../types/oss';
 import { toast } from 'sonner';
+import { Badge } from './ui/badge';
 
 interface OSSSectionProps {
   sales: Sale[];
@@ -19,6 +20,28 @@ export function OSSSection({ sales, returns }: OSSSectionProps) {
   const [selectedPeriod, setSelectedPeriod] = useState<'quarter' | 'month' | 'custom'>('quarter');
   const [customStart, setCustomStart] = useState<string>('');
   const [customEnd, setCustomEnd] = useState<string>('');
+  const [expandedCountries, setExpandedCountries] = useState<Set<string>>(new Set());
+
+  const toggleCountryExpand = (countryCode: string) => {
+    setExpandedCountries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(countryCode)) {
+        newSet.delete(countryCode);
+      } else {
+        newSet.add(countryCode);
+      }
+      return newSet;
+    });
+  };
+
+  const formatTransactionDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('it-IT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
 
   // Calculate period dates
   const period = useMemo(() => {
@@ -174,6 +197,7 @@ export function OSSSection({ sales, returns }: OSSSectionProps) {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-10"></TableHead>
                     <TableHead>Paese</TableHead>
                     <TableHead>Codice</TableHead>
                     <TableHead>Aliquota IVA</TableHead>
@@ -183,22 +207,103 @@ export function OSSSection({ sales, returns }: OSSSectionProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vatData.map((data) => (
-                    <TableRow key={data.country}>
-                      <TableCell>{data.countryName}</TableCell>
-                      <TableCell>{data.country}</TableCell>
-                      <TableCell>{data.vatRate}%</TableCell>
-                      <TableCell className="text-right">
-                        €{data.baseAmount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-blue-600">
-                        €{data.vatAmount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {data.transactionCount}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {vatData.map((data) => {
+                    const isExpanded = expandedCountries.has(data.country);
+                    return (
+                      <>
+                        <TableRow 
+                          key={data.country}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleCountryExpand(data.country)}
+                        >
+                          <TableCell className="w-10">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-6 w-6 p-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCountryExpand(data.country);
+                              }}
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TableCell>
+                          <TableCell className="font-medium">{data.countryName}</TableCell>
+                          <TableCell>{data.country}</TableCell>
+                          <TableCell>{data.vatRate}%</TableCell>
+                          <TableCell className="text-right">
+                            €{data.baseAmount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right font-medium text-blue-600">
+                            €{data.vatAmount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {data.transactionCount}
+                          </TableCell>
+                        </TableRow>
+                        {/* Expanded transaction details */}
+                        {isExpanded && data.transactions.length > 0 && (
+                          <TableRow key={`${data.country}-details`}>
+                            <TableCell colSpan={7} className="p-0 bg-muted/30">
+                              <div className="px-4 py-3">
+                                <div className="text-sm font-medium text-muted-foreground mb-2">
+                                  Dettaglio Documenti ({data.transactions.length})
+                                </div>
+                                <div className="border rounded-md bg-background">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="text-xs">
+                                        <TableHead className="py-2">Tipo</TableHead>
+                                        <TableHead className="py-2">Documento</TableHead>
+                                        <TableHead className="py-2">Data</TableHead>
+                                        <TableHead className="py-2">Rif. Ordine</TableHead>
+                                        <TableHead className="py-2 text-right">Importo</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {data.transactions.map((tx, idx) => (
+                                        <TableRow key={`${data.country}-tx-${idx}`} className="text-sm">
+                                          <TableCell className="py-2">
+                                            <Badge 
+                                              variant={tx.type === 'sale' ? 'default' : 'destructive'}
+                                              className="text-xs"
+                                            >
+                                              {tx.type === 'sale' ? (
+                                                <><Receipt className="w-3 h-3 mr-1" /> Vendita</>
+                                              ) : (
+                                                <><RotateCcw className="w-3 h-3 mr-1" /> Reso</>
+                                              )}
+                                            </Badge>
+                                          </TableCell>
+                                          <TableCell className="py-2 font-mono text-xs">
+                                            {tx.documentType} N. {tx.documentNumber}
+                                          </TableCell>
+                                          <TableCell className="py-2">
+                                            {formatTransactionDate(tx.date)}
+                                          </TableCell>
+                                          <TableCell className="py-2 text-muted-foreground">
+                                            {tx.orderReference || '-'}
+                                          </TableCell>
+                                          <TableCell className={`py-2 text-right font-medium ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                            €{tx.amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

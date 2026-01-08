@@ -5,6 +5,16 @@ export interface OSSCountry {
   vatRates?: Record<string, number>; // Aliquote per categoria (se diverse)
 }
 
+// Dettaglio singola transazione per drill-down
+export interface OSSTransactionDetail {
+  type: 'sale' | 'return';
+  documentType: string;    // "RICEVUTA" o "RESO"
+  documentNumber: string;  // Numero documento
+  date: string;
+  amount: number;
+  orderReference?: string;
+}
+
 export interface OSSVATData {
   country: string;
   countryName: string;
@@ -14,6 +24,7 @@ export interface OSSVATData {
   transactionCount: number;
   salesAmount: number;
   returnsAmount: number;
+  transactions: OSSTransactionDetail[]; // Dettagli documenti per drill-down
 }
 
 export interface OSSExportFormat {

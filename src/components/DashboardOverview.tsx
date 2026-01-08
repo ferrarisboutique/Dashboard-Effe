@@ -27,12 +27,21 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, custom
   const brandData = getBrandData(filteredSales);
   const categoryData = getCategoryData(filteredSales);
 
+  // Calculate net revenue (fatturato - resi)
+  const netRevenue = metrics.totalSales - metrics.totalReturns;
+
   // Calculate YoY changes
   const totalSalesYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => s.reduce((sum, sale) => sum + sale.amount, 0));
   const totalReturnsYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
     const filtered = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
     // I resi hanno amount negativo, usiamo Math.abs() per visualizzarli come positivi
     return filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
+  });
+  const netRevenueYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
+    const totalSales = s.reduce((sum, sale) => sum + sale.amount, 0);
+    const filtered = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
+    const totalReturns = filtered.reduce((sum, ret) => sum + Math.abs(ret.amount), 0);
+    return totalSales - totalReturns;
   });
   const returnRateYoY = calculateYoYChange(sales, dateRange, customStart, customEnd, (s) => {
     const filtered = filterDataByDateAdvanced(returns, dateRange, customStart, customEnd);
@@ -79,9 +88,17 @@ export function DashboardOverview({ sales, returns, inventory, dateRange, custom
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <MetricCard
-          title="Fatturato Totale"
+          title="Fatturato Netto"
+          value={netRevenue}
+          prefix="€"
+          change={netRevenueYoY.change}
+          changeType={netRevenueYoY.changeType}
+          description="Fatturato al netto dei resi"
+        />
+        <MetricCard
+          title="Fatturato Lordo"
           value={metrics.totalSales}
           prefix="€"
           change={totalSalesYoY.change}

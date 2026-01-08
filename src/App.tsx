@@ -14,17 +14,23 @@ import { EmptyState } from "./components/EmptyState";
 import { DateRangeFilter } from "./components/DateRangeFilter";
 import { WarningBar } from "./components/WarningBar";
 import { PaymentMethodMapping } from "./components/PaymentMethodMapping";
+import { ChannelCostSettings } from "./components/ChannelCostSettings";
 import { AnalyticsSection } from "./components/AnalyticsSection";
 import { EcommerceDataUpload } from "./components/EcommerceDataUpload";
 import { OSSSection } from "./components/OSSSection";
+import { OrderSearch } from "./components/OrderSearch";
 import { DatabaseManager } from "./components/DatabaseManager";
 import { SectionErrorBoundary } from "./components/SectionErrorBoundary";
 import { DashboardSkeleton, InventorySkeleton } from "./components/ui/skeleton";
+import { LoginPage } from "./components/LoginPage";
+import { AdminPanel } from "./components/AdminPanel";
 import { ProcessedSaleData, ProcessedEcommerceSaleData, ProcessedReturnData } from "./types/upload";
 import { ProcessedInventoryData } from "./types/inventory";
-import { Return } from "./types/dashboard";
+import { Return, ChannelCostSettings as ChannelCostSettingsType } from "./types/dashboard";
 import { useSalesData } from "./hooks/useSalesData";
 import { useInventoryData } from "./hooks/useInventoryData";
+import { useAuth } from "./contexts/AuthContext";
+import { usePermissions, ROLE_NAMES } from "./hooks/usePermissions";
 import { 
   Home, 
   Store, 
@@ -38,19 +44,31 @@ import {
   ShoppingCart,
   AlertCircle,
   CheckCircle,
-  CreditCard
+  CreditCard,
+  Search,
+  Shield,
+  LogOut,
+  User,
+  Loader2
 } from "lucide-react";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import { Badge } from "./components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu";
+import { EffeLogo } from "./components/EffeLogo";
 import { API_BASE_URL, publicAnonKey as ANON_KEY } from "./utils/supabase/info";
 
 export default function App() {
+  // Auth state
+  const { user, profile, loading: authLoading, signOut, isAdmin } = useAuth();
+  const { filterSidebarItems, canAccess, defaultSection } = usePermissions();
+  
   const [activeSection, setActiveSection] = useState('overview');
   const [dateRange, setDateRange] = useState('all');
   const [customStart, setCustomStart] = useState<string | undefined>(undefined);
   const [customEnd, setCustomEnd] = useState<string | undefined>(undefined);
   const [paymentMappings, setPaymentMappings] = useState<Record<string, { macroArea: string; channel: string }>>({});
+  const [channelCosts, setChannelCosts] = useState<Record<string, ChannelCostSettingsType>>({});
   const [unmappedPaymentMethods, setUnmappedPaymentMethods] = useState<string[]>([]);
   const [dismissedWarning, setDismissedWarning] = useState(false);
   
@@ -68,7 +86,7 @@ export default function App() {
     getDatabaseStats,
     getDuplicates,
     removeDuplicates
-  } = useSalesData(true);
+  } = useSalesData(!!user);
   
   const { 
     inventory, 
@@ -80,13 +98,15 @@ export default function App() {
     refreshInventory, 
     uploadInventory, 
     clearInventory 
-  } = useInventoryData(true);
+  } = useInventoryData(!!user);
 
-  const sidebarItems = [
+  // All sidebar items
+  const allSidebarItems = [
     { id: 'overview', label: 'Panoramica', icon: Home },
     { id: 'stores', label: 'Negozi', icon: Store },
     { id: 'online', label: 'Online', icon: Globe },
     { id: 'inventory', label: 'Inventario', icon: Package },
+    { id: 'order-search', label: 'Ricerca Ordini', icon: Search },
     { id: 'data-quality', label: 'Qualità Dati', icon: AlertCircle },
     { id: 'upload', label: 'Carica Vendite', icon: Upload },
     { id: 'upload-ecommerce', label: 'Carica Ecommerce', icon: Upload },
@@ -95,7 +115,20 @@ export default function App() {
     { id: 'oss', label: 'OSS', icon: BarChart3 },
     { id: 'payment-mapping', label: 'Mapping Pagamenti', icon: CreditCard },
     { id: 'settings', label: 'Impostazioni', icon: Settings },
+    { id: 'admin', label: 'Gestione Utenti', icon: Shield },
   ];
+
+  // Filter sidebar items based on user permissions
+  const sidebarItems = useMemo(() => {
+    return filterSidebarItems(allSidebarItems);
+  }, [profile?.role]);
+
+  // Set default section based on role when user logs in
+  useEffect(() => {
+    if (profile && !canAccess(activeSection)) {
+      setActiveSection(defaultSection);
+    }
+  }, [profile, defaultSection]);
 
   // Backend now applies payment mappings, but we keep a minimal fallback for ecommerce sales without channel
   const salesWithMappings = useMemo(() => {
@@ -126,9 +159,10 @@ export default function App() {
     return mapped;
   }, [sales, paymentMappings]);
 
-  // Load payment mappings
+  // Load payment mappings and channel costs
   useEffect(() => {
     loadPaymentMappings();
+    loadChannelCosts();
   }, []);
 
   // Check for unmapped payment methods
@@ -161,6 +195,26 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error loading payment mappings:', error);
+    }
+  };
+
+  const loadChannelCosts = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/sales/channel-costs`, {
+        headers: {
+          'Authorization': `Bearer ${ANON_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.costs) {
+          setChannelCosts(data.costs);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading channel costs:', error);
     }
   };
 
@@ -289,7 +343,7 @@ export default function App() {
           return (
             <EmptyState
               icon={Home}
-              title="Benvenuto nella Fashion Dashboard"
+              title="Benvenuto in EFFE Dashboard"
               description="Per iniziare, carica i tuoi dati di vendita e inventario."
               action={
                 <div className="flex gap-3">
@@ -414,6 +468,7 @@ export default function App() {
             customEnd={customEnd}
             unmappedPaymentMethods={unmappedPaymentMethods}
             onNavigateToMapping={() => setActiveSection('payment-mapping')}
+            channelCosts={channelCosts}
           />
         );
       
@@ -532,6 +587,9 @@ export default function App() {
           <AnalyticsSection 
             sales={salesWithMappings} 
             paymentMappings={paymentMappings}
+            dateRange={dateRange}
+            customStart={customStart}
+            customEnd={customEnd}
           />
         );
       
@@ -541,6 +599,15 @@ export default function App() {
             onSalesUploaded={handleEcommerceSalesUploaded}
             onReturnsUploaded={handleEcommerceReturnsUploaded}
             paymentMappings={paymentMappings}
+          />
+        );
+      
+      case 'order-search':
+        return (
+          <OrderSearch
+            sales={salesWithMappings}
+            returns={returns}
+            inventory={inventory}
           />
         );
       
@@ -554,13 +621,23 @@ export default function App() {
       
       case 'payment-mapping':
         return (
-          <PaymentMethodMapping 
-            sales={salesWithMappings}
-            onMappingChange={async () => {
-              await loadPaymentMappings();
-              await refreshSales(); // Refresh sales to apply new mappings
-            }}
-          />
+          <div className="space-y-6">
+            <PaymentMethodMapping 
+              sales={salesWithMappings}
+              onMappingChange={async () => {
+                await loadPaymentMappings();
+                await refreshSales(); // Refresh sales to apply new mappings
+              }}
+            />
+            <ChannelCostSettings 
+              paymentMappings={paymentMappings}
+              onCostsChange={async () => {
+                // Reload channel costs and refresh sales to recalculate margins
+                await loadChannelCosts();
+                await refreshSales();
+              }}
+            />
+          </div>
         );
       case 'data-quality':
         {
@@ -582,6 +659,13 @@ export default function App() {
           );
         }
       
+      case 'admin':
+        return (
+          <SectionErrorBoundary sectionName="Admin Panel">
+            <AdminPanel />
+          </SectionErrorBoundary>
+        );
+
       case 'settings':
         return (
           <div className="space-y-6">
@@ -808,12 +892,34 @@ export default function App() {
         return (
           <EmptyState
             icon={Home}
-            title="Fashion Dashboard"
+            title="EFFE Dashboard"
             description="Benvenuto nella tua dashboard per il monitoraggio delle performance di moda."
           />
         );
     }
   };
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-purple-500 mx-auto mb-4" />
+          <p className="text-gray-400">Caricamento...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login page if not authenticated
+  if (!user || !profile) {
+    return (
+      <>
+        <Toaster />
+        <LoginPage />
+      </>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -821,9 +927,9 @@ export default function App() {
       <div className="flex h-screen w-full">
         <Sidebar>
           <SidebarHeader className="border-b px-6 py-4">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-6 h-6" />
-              <span className="font-semibold">Fashion Dashboard</span>
+            <div className="flex items-center gap-3">
+              <EffeLogo className="w-8 h-8" />
+              <span className="font-semibold text-lg">EFFE Dashboard</span>
             </div>
           </SidebarHeader>
           <SidebarContent className="px-4 py-4">
@@ -880,6 +986,46 @@ export default function App() {
                   <RefreshCw className={`w-4 h-4 mr-2 ${(salesLoading || inventoryLoading) ? 'animate-spin' : ''}`} />
                   Aggiorna
                 </Button>
+
+                {/* User Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <span className="hidden md:inline-block max-w-[120px] truncate">
+                        {profile?.display_name || profile?.email}
+                      </span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>
+                      <div className="flex flex-col space-y-1">
+                        <p className="text-sm font-medium leading-none">
+                          {profile?.display_name || 'Utente'}
+                        </p>
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {profile?.email}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem disabled>
+                      <Badge variant="outline" className="mr-2">
+                        {profile?.role && ROLE_NAMES[profile.role]}
+                      </Badge>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      onClick={() => signOut()}
+                      className="text-destructive focus:text-destructive cursor-pointer"
+                    >
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Esci
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </header>

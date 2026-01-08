@@ -1,6 +1,7 @@
 // Supabase Edge Function - Native Deno (no Hono)
 import { handleSalesRoutes } from './sales.ts';
 import { handleInventoryRoutes } from './inventory.ts';
+import { handleAuthRoutes } from './auth.ts';
 
 // CORS headers helper
 function corsHeaders(): HeadersInit {
@@ -66,6 +67,7 @@ Deno.serve(async (req: Request) => {
           health: '/health',
           sales: '/sales',
           inventory: '/inventory',
+          auth: '/auth',
         },
       });
     }
@@ -94,6 +96,11 @@ Deno.serve(async (req: Request) => {
     // Route to inventory handlers
     if (cleanPath.startsWith('/inventory')) {
       return handleInventoryRoutes(req, cleanPath, method);
+    }
+
+    // Route to auth handlers
+    if (cleanPath.startsWith('/auth')) {
+      return handleAuthRoutes(req, cleanPath, method);
     }
 
     // 404 for unknown routes

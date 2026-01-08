@@ -1,7 +1,7 @@
 import { Sale, Return } from '../types/dashboard';
-import { OSSCountry, OSSVATData } from '../types/oss';
+import { OSSCountry, OSSVATData, OSSTransactionDetail } from '../types/oss';
 
-// Lista paesi OSS con aliquote IVA standard
+// Lista paesi OSS con aliquote IVA standard (esclusa Italia - paese di origine)
 export const OSS_COUNTRIES: OSSCountry[] = [
   { code: 'AT', name: 'Austria', vatRate: 20 },
   { code: 'BE', name: 'Belgio', vatRate: 21 },
@@ -17,7 +17,7 @@ export const OSS_COUNTRIES: OSSCountry[] = [
   { code: 'GR', name: 'Grecia', vatRate: 24 },
   { code: 'HU', name: 'Ungheria', vatRate: 27 },
   { code: 'IE', name: 'Irlanda', vatRate: 23 },
-  { code: 'IT', name: 'Italia', vatRate: 22 },
+  // IT (Italia) esclusa - è il paese di origine, non rientra nell'OSS
   { code: 'LV', name: 'Lettonia', vatRate: 21 },
   { code: 'LT', name: 'Lituania', vatRate: 21 },
   { code: 'LU', name: 'Lussemburgo', vatRate: 17 },
@@ -45,6 +45,7 @@ export function getCountryName(countryCode: string): string {
 }
 
 // Calculate VAT by country for a given period
+// OSS include solo vendite con documento "RICEVUTA" e resi con documento "RESO"
 export function calculateVATByCountry(
   sales: Sale[],
   returns: Return[],
@@ -55,14 +56,24 @@ export function calculateVATByCountry(
   const endDate = new Date(period.end);
   endDate.setHours(23, 59, 59, 999); // End of day
 
+  // Filtra vendite: solo nel periodo E con documento "RICEVUTA"
   const filteredSales = sales.filter(sale => {
     const saleDate = new Date(sale.date);
-    return saleDate >= startDate && saleDate <= endDate;
+    const inPeriod = saleDate >= startDate && saleDate <= endDate;
+    // Solo documenti RICEVUTA (case insensitive)
+    const documento = ((sale as any).documento || '').toString().toUpperCase().trim();
+    const isRicevuta = documento === 'RICEVUTA';
+    return inPeriod && isRicevuta;
   });
 
+  // Filtra resi: solo nel periodo E con documento "RESO" (non NOTA CRED o altri)
   const filteredReturns = returns.filter(ret => {
     const returnDate = new Date(ret.date);
-    return returnDate >= startDate && returnDate <= endDate;
+    const inPeriod = returnDate >= startDate && returnDate <= endDate;
+    // Solo documenti RESO (case insensitive)
+    const reason = (ret.reason || '').toString().toUpperCase().trim();
+    const isReso = reason === 'RESO';
+    return inPeriod && isReso;
   });
 
   // Group by country
@@ -107,6 +118,36 @@ export function calculateVATByCountry(
     const vatAmount = (baseAmount * vatRate) / 100;
     const transactionCount = data.sales.length + data.returns.length;
 
+    // Collect transaction details for drill-down
+    const transactions: OSSTransactionDetail[] = [];
+    
+    // Add sales transactions
+    for (const sale of data.sales) {
+      transactions.push({
+        type: 'sale',
+        documentType: ((sale as any).documento || 'RICEVUTA').toString().toUpperCase(),
+        documentNumber: ((sale as any).numero || sale.orderReference || sale.id).toString(),
+        date: sale.date,
+        amount: sale.amount,
+        orderReference: sale.orderReference,
+      });
+    }
+    
+    // Add return transactions
+    for (const ret of data.returns) {
+      transactions.push({
+        type: 'return',
+        documentType: 'RESO',
+        documentNumber: ret.orderReference || ret.saleId || ret.id,
+        date: ret.date,
+        amount: -Math.abs(ret.amount), // Negative for returns
+        orderReference: ret.orderReference,
+      });
+    }
+    
+    // Sort transactions by date (most recent first)
+    transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
     vatData.push({
       country: countryCode,
       countryName: ossCountry.name,
@@ -115,7 +156,8 @@ export function calculateVATByCountry(
       vatAmount,
       transactionCount,
       salesAmount,
-      returnsAmount
+      returnsAmount,
+      transactions,
     });
   }
 
