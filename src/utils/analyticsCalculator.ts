@@ -67,6 +67,30 @@ function returnToTransaction(ret: Return): AnalyticsTransactionDetail {
   };
 }
 
+// Helper: determine country for a sale (store sales without country = Italy)
+function getSaleCountry(sale: Sale): string {
+  if (sale.country) {
+    return sale.country.toUpperCase();
+  }
+  // Store sales without country are assumed to be in Italy
+  if (sale.channel === 'negozio_donna' || sale.channel === 'negozio_uomo') {
+    return 'IT';
+  }
+  return 'UNKNOWN';
+}
+
+// Helper: determine country for a return (store returns without country = Italy)
+function getReturnCountry(ret: Return): string {
+  if (ret.country) {
+    return ret.country.toUpperCase();
+  }
+  // Store returns without country are assumed to be in Italy
+  if (ret.channel === 'negozio_donna' || ret.channel === 'negozio_uomo') {
+    return 'IT';
+  }
+  return 'UNKNOWN';
+}
+
 // Calculate analytics aggregated by country
 export function calculateCountryAnalytics(
   sales: Sale[],
@@ -79,7 +103,7 @@ export function calculateCountryAnalytics(
 
   // Group sales by country
   for (const sale of sales) {
-    const country = (sale.country || 'UNKNOWN').toUpperCase();
+    const country = getSaleCountry(sale);
     if (!countryMap.has(country)) {
       countryMap.set(country, { sales: [], returns: [] });
     }
@@ -88,7 +112,7 @@ export function calculateCountryAnalytics(
 
   // Group returns by country
   for (const ret of returns) {
-    const country = (ret.country || 'UNKNOWN').toUpperCase();
+    const country = getReturnCountry(ret);
     if (!countryMap.has(country)) {
       countryMap.set(country, { sales: [], returns: [] });
     }
