@@ -67,31 +67,17 @@ function returnToTransaction(ret: Return): AnalyticsTransactionDetail {
   };
 }
 
-// Helper: determine country for a sale (store sales without country = Italy)
-function getSaleCountry(sale: Sale): string {
-  if (sale.country) {
-    return sale.country.toUpperCase();
-  }
-  // Store sales without country are assumed to be in Italy
-  if (sale.channel === 'negozio_donna' || sale.channel === 'negozio_uomo') {
-    return 'IT';
-  }
-  return 'UNKNOWN';
+// Helper: check if sale is from physical store
+function isStoreSale(sale: Sale): boolean {
+  return sale.channel === 'negozio_donna' || sale.channel === 'negozio_uomo';
 }
 
-// Helper: determine country for a return (store returns without country = Italy)
-function getReturnCountry(ret: Return): string {
-  if (ret.country) {
-    return ret.country.toUpperCase();
-  }
-  // Store returns without country are assumed to be in Italy
-  if (ret.channel === 'negozio_donna' || ret.channel === 'negozio_uomo') {
-    return 'IT';
-  }
-  return 'UNKNOWN';
+// Helper: check if return is from physical store
+function isStoreReturn(ret: Return): boolean {
+  return ret.channel === 'negozio_donna' || ret.channel === 'negozio_uomo';
 }
 
-// Calculate analytics aggregated by country
+// Calculate analytics aggregated by country (excludes store sales)
 export function calculateCountryAnalytics(
   sales: Sale[],
   returns: Return[]
@@ -101,18 +87,24 @@ export function calculateCountryAnalytics(
     returns: Return[];
   }>();
 
-  // Group sales by country
+  // Group sales by country (exclude store sales)
   for (const sale of sales) {
-    const country = getSaleCountry(sale);
+    // Skip store sales - they don't have meaningful country data
+    if (isStoreSale(sale)) continue;
+    
+    const country = (sale.country || 'UNKNOWN').toUpperCase();
     if (!countryMap.has(country)) {
       countryMap.set(country, { sales: [], returns: [] });
     }
     countryMap.get(country)!.sales.push(sale);
   }
 
-  // Group returns by country
+  // Group returns by country (exclude store returns)
   for (const ret of returns) {
-    const country = getReturnCountry(ret);
+    // Skip store returns
+    if (isStoreReturn(ret)) continue;
+    
+    const country = (ret.country || 'UNKNOWN').toUpperCase();
     if (!countryMap.has(country)) {
       countryMap.set(country, { sales: [], returns: [] });
     }
